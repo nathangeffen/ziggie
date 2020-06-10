@@ -1,23 +1,50 @@
+# Meaningful compartment prefixes:
+# S - Susceptible  (See delta_S_I and delta_S_I1)
+# E - Exposed  (See delta_S_I and delta_S_I1)
+# I - Infectious (See delta_S_I and delta_S_I1)
+# T - On treatment (See delta_S_I1 and treatment_infectiousness)
+# N - Population size. Strictly reserved. Do not prefix any compartment N.
+# D - Dead (not included in totalling N)
+# B - Birth (not tallied)
+# R - Recovered
+# M - Maternal immunity
+# V - Vaccinated
+
 import csv
 from copy import deepcopy
 import random
 from multiprocessing import Pool
 import os
 
-def delta_S_I(from_to, prod, compartments, totals):
-    return prod * compartments['S'] * totals['I'] / totals['N']
+def delta_S_I1(from_to, prod, compartments, totals, model=None):
+    from_, _ = from_to.split("_")
+    infections = 0
+    ti = model['parameters']['treatment_infectiousness']
+    for key, value in compartments.items():
+        if key[0] == 'I':
+            infections += value
+        if key[0] == 'T':
+            infections += ti * value
+    return prod * compartments[from_] * infections / totals['N']
 
-def delta_X_Y(from_to, prod, compartments, totals):
-    return prod * compartments[from_to[0]]
+def delta_S_I(from_to, prod, compartments, totals, model=None):
+    from_, to_ = from_to.split("_")
+    return prod * compartments[from_] * totals[to_] / totals['N']
 
-def delta_birth_X(from_to, prod, compartments, totals):
-    return prod * compartments[from_to[2]]
+def delta_X_Y(from_to, prod, compartments, totals, model=None):
+    from_, _ = from_to.split("_")
+    return prod * compartments[from_]
+
+def delta_birth_X(from_to, prod, compartments, totals, model=None):
+    _, to_ = from_to.split("_")
+    return prod * compartments[to_]
 
 PARAMETERS = {
     'from': 0,
     'to': 365,
     'record_frequency': 50,
-    'reduce_infectivity': 0.999,
+    'reduce_infectivity': 0.9999,
+    'treatment_infectiousness': 0.1,
     'noise': 0.0,
     'discrete': False,
     'record_first': True,
@@ -25,19 +52,8 @@ PARAMETERS = {
     'transition_funcs' : {
         'S_I': delta_S_I,
         'S_E': delta_S_I,
-        'E_I': delta_X_Y,
-        'I_R': delta_X_Y,
-        'S_M': delta_X_Y,
-        'S_D': delta_X_Y,
-        'I_M': delta_X_Y,
-        'I_D': delta_X_Y,
-        'E_M': delta_X_Y,
-        'E_D': delta_X_Y,
-        'R_M': delta_X_Y,
-        'R_D': delta_X_Y,
-        'M_D': delta_X_Y,
-        'M_S': delta_X_Y,
-        'R_S': delta_X_Y,
+        'S_I1': delta_S_I1,
+        'S_E1': delta_S_I1,
         'B_S': delta_birth_X,
         'default': delta_X_Y
     },
@@ -45,102 +61,73 @@ PARAMETERS = {
     'after_funcs': [],
 }
 
-TOTALS_TEMPLATE = {
-    'S': 0.0, # Susceptible
-    'E': 0.0, # Exposed
-    'I': 0.0, # Infectious
-    'R': 0.0, # Recovered
-    'M': 0.0, # Maternal immunity
-    'V': 0.0, # Vaccinated
-    'D': 0.0, # Dead
-    'N': 0.0, # total of all the above less dead
-    # 'B': 0.0 Births - but these are not explicitly tracked
-}
+def make_parameters(dictionary):
+    parameters = deepcopy(PARAMETERS)
+    for key, val in dictionary.items():
+        if key in parameters:
+            if type(parameters[key]) == type({}):
+                for key2, val2 in dictionary[key].items():
+                    parameters[key][key2] = val2
+            else:
+                parameters[key] = val
+        else:
+            parameters[key] = val
+    return parameters
 
+def traverse(group):
+    yield group
+    if 'groups' in group:
+        for group in group['groups']:
+            yield from traverse(group)
 
-def traverse(groups):
-    if type(groups) == type({}):
-        _groups = [groups]
-    else:
-        _groups = groups
+def reduce_infectivity(model):
+    reduction = model['parameters'].get('reduce_infectivity',1.0)
 
-    for group in _groups:
-        yield group
-        if 'groups' in group:
-            yield from traverse(group['groups'])
-
-def reduce_infectivity(groups, parameters):
-    for group in traverse(groups):
+    for group in traverse(model):
         if 'transitions' in group:
             for key, value in group['transitions'].items():
                 from_, to_ = key.split("_")
                 if from_[0] == 'S' and (to_[0] == 'E' or to_[0] == 'I'):
-                    group['transitions'][key] *= parameters['reduce_infectivity']
+                    group['transitions'][key] *= reduction
 
-def _update_compartments(group, parameters, totals, transitions):
-    inherited_transitions = deepcopy(transitions)
-    if 'transitions' in group:
-        inherited_transitions.update(group['transitions'])
-
-    if 'compartments' in group:
-        compartments = group['compartments']
-        deltas = {}
-        for key, value in inherited_transitions.items():
-            func = None
-            if key in parameters['transition_funcs']:
-                func = parameters['transition_funcs'][key]
-            else:
-                func = parameters['transition_funcs']['default']
-            val = func(key, inherited_transitions[key], compartments, totals)
-
-            noise = parameters['noise']
-            if noise:
-                val *= random.uniform(1.0 - noise, 1.0 + noise)
-            if parameters['discrete']:
-                val = round(val, 0)
-            deltas[key] = val
-        for key, value in deltas.items():
-            from_, to_ = key.split("_")
-            if from_[0] is not 'B':
-                compartments[from_] -= value
-            compartments[to_] += value
-    elif 'groups' in group:
-        for subgroup in group['groups']:
-            _update_compartments(subgroup, parameters, totals,
-                                inherited_transitions)
-
-def _calc_group_totals(group, totals):
-    if 'compartments' in group:
-        compartments = group['compartments']
-        for key in totals:
-            if key is not 'N' and key in compartments:
-                totals[key] += compartments[key]
-                if key is not 'D':
-                    totals['N'] += compartments[key]
-    elif 'groups' in group:
-        for subgroup in group['groups']:
-            _calc_group_totals(subgroup, totals)
-
-def calc_totals(group, parameters=None, name=None, totals=None,
-                transitions=None):
-    if totals is None:
-        totals = deepcopy(TOTALS_TEMPLATE)
-    if parameters is None:
-        parameters = deepcopy(PARAMETERS)
-
-    if 'transitions' in group:
-        if transitions is None:
-            transitions = group['transitions']
-        else:
+def _update_compartments(model, totals):
+    transitions = {}
+    parameters = model['parameters']
+    for group in traverse(model):
+        if 'transitions' in group:
             transitions.update(group['transitions'])
+        if 'compartments' in group:
+            compartments = group['compartments']
+            deltas = {}
+            for key, value in transitions.items():
+                func = None
+                if key in parameters['transition_funcs']:
+                    func = parameters['transition_funcs'][key]
+                else:
+                    func = parameters['transition_funcs']['default']
+                val = func(key, value, compartments, totals, model)
+                noise = parameters['noise']
+                if noise:
+                    val *= random.uniform(1.0 - noise, 1.0 + noise)
+                if parameters['discrete']:
+                    val = round(val, 0)
+                deltas[key] = val
+            for key, value in deltas.items():
+                from_, to_ = key.split("_")
+                compartments[from_] -= value
+                compartments[to_] += value
 
-    if name and group.get('name') != name:
-        if "groups" in group:
-            for subgroup in group["groups"]:
-                totals = calc_totals(subgroup, parameters, name, totals,
-                                     transitions)
-    else:
-        _calc_group_totals(group, totals)
+def calc_totals(model):
+    totals = {'N': 0}
+    for group in traverse(model):
+        if 'compartments' in group:
+            for key, value in group['compartments'].items():
+                if key in totals:
+                    totals[key] += value
+                else:
+                    totals[key] = value
+                if key[0] is not 'D':
+                    totals['N'] += value
     return totals
 
 def _sum_compartment(total_dict, compartment_prefixes):
@@ -150,10 +137,8 @@ def _sum_compartment(total_dict, compartment_prefixes):
             total += value
     return total
 
-def R0(groups):
-    if len(groups) < 4:
-        return None
-    totals = [calc_totals(group) for group in groups]
+def _R0(modelSeries):
+    totals = [calc_totals(model) for model in modelSeries]
     infections = [(_sum_compartment(total, {"I", "E"}),
                    _sum_compartment(total, {"S"}),
                    _sum_compartment(total, {"N"})) for total in totals]
@@ -174,78 +159,132 @@ def R0(groups):
     r3 = 1 / (infections[r0_eq_1 - 1][1] / infections[r0_eq_1][2])
     r4 = 1 / (infections[r0_eq_1 + 1][1] / infections[r0_eq_1][2])
     r5 = 1 / ( (infections[r0_eq_1 - 1][1] + diff) / infections[r0_eq_1][2])
-    return [r0, r1, r2, r3, r4, r5]
+    return (r0, r1, r2, r3, r4, r5)
 
-def _iterate_model(groups, parameters, ident=None):
-    arr = []
-    if parameters['record_first']:
-        for group in groups:
+# This needs to be reconceptualised. Highly inaccurate for large R0
+def R0(modelListSeries):
+    if len(modelListSeries) < 4:
+        return None
+    r0 = []
+    for i in range(len(modelListSeries[0])):
+        r0.append(_R0([m[i] for m in modelListSeries]))
+    return r0
+
+def _iterate_model(modelList, ident=None):
+    modelListSeries = []
+    firstModelList = []
+    for model in modelList:
+        if model['parameters']['record_first']:
             if ident is not None:
-                group['ident'] = ident
-            group['iteration'] = 0
-        arr.append(deepcopy(groups))
-    for iteration in range(parameters['from'], parameters['to']):
-        for func in parameters['before_funcs']:
-            func(groups, parameters)
-        for group in groups:
-            totals = calc_totals(group, parameters)
-            _update_compartments(group, parameters, totals, {})
-            group['iteration'] = iteration + 1
+                model['ident'] = ident
+            model['iteration'] = 0
+            firstModelList.append(deepcopy(model))
+    if len(firstModelList) > 0:
+        modelListSeries.append(firstModelList)
+    from_ = min([m['parameters']['from'] for m in modelList])
+    to_ = max([m['parameters']['to'] for m in modelList])
+
+    for iteration in range(from_, to_):
+        iterationModelList = []
+        for model in modelList:
+            if iteration < model['parameters']['from'] or \
+               iteration >= model['parameters']['to']:
+                break
+            model['iteration'] = iteration + 1
             if ident is not None:
-                group['ident'] = ident
-        for func in parameters['after_funcs']:
-            func(groups, parameters)
-        if (iteration + 1) % parameters['record_frequency'] == 0:
-            arr.append(deepcopy(groups))
-    if parameters['record_last'] and \
-       (parameters['to'] % parameters['record_frequency'] != 0):
-        arr.append(deepcopy(groups))
-    return arr
+                model['ident'] = ident
+            for func in model['parameters']['before_funcs']:
+                func(model)
+            totals = calc_totals(model)
+            _update_compartments(model, totals)
+            for func in model['parameters']['after_funcs']:
+                func(model)
+            if (iteration + 1) % model['parameters']['record_frequency'] == 0:
+                iterationModelList.append(model)
+        if len(iterationModelList) > 0:
+            modelListSeries.append(deepcopy(iterationModelList))
 
-def _group_to_header(group, table, current, depth=0, run=None):
-    if 'ident' in group:
-        current.append('ident')
-    if run and depth == 0:
-        current.append("run")
-    if 'iteration' in group:
-        current.append('iter')
-    if 'name' in group:
-        current.append('name_' + str(depth))
-        depth += 1
-    if 'groups' in group:
-        return _group_to_header(group['groups'][0], table, current, depth)
-    if 'compartments' in group:
-        for key in group['compartments']:
-            current.append(key)
-        return current
+    lastModelList = []
+    for model in modelList:
+        if model['parameters']['record_last']:
+            if ident is not None:
+                model['ident'] = ident
+            model['iteration'] = to_
+            lastModelList.append(deepcopy(model))
+    if len(lastModelList) > 0:
+        modelListSeries.append(lastModelList)
 
+    return modelListSeries
 
-def _group_to_table(group, table, current, run=None):
-    if 'ident' in group:
-        current.append(group['ident'])
-    if run:
-        current.append(run)
-    if 'iteration' in group:
-        current.append(group['iteration'])
-    if 'name' in group:
-        current.append(group['name'])
+def _get_header(model, concat_names=None):
+    biggest = []
+    current = []
+    firstName = True
+    i = 0
+    for group in traverse(model):
+        if 'ident' in group:
+            current.append('ident')
+        if 'iteration' in group:
+            current.append('iter')
+        if 'name' in group:
+            if concat_names and firstName is False:
+                pass
+            else:
+                if concat_names and firstName:
+                    current.append('name')
+                else:
+                    current.append('name_' + str(i))
+                firstName = False
+                i += 1
+        if 'compartments' in group:
+            for key in group['compartments']:
+                current.append(key)
+            if len(current) > len(biggest):
+                biggest = current.copy()
+            current = []
+    return biggest
 
-    if 'compartments' in group:
-        for key, val in group['compartments'].items():
-            current.append(val)
-        table.append(current.copy())
-        current = []
+def model_to_table(model, concat_names=None):
+    table = []
+    current = []
+    idents = []
+    prevIdents = idents
+    names = []
+    prevNames = names
+    for group in traverse(model):
+        if 'ident' in group:
+            idents.append(group['ident'])
+        if 'iteration' in group:
+            idents.append(group['iteration'])
+        if 'name' in group:
+            names.append(group['name'])
+        if 'compartments' in group:
+            i = max(len(prevIdents) - len(idents), 0)
+            current += prevIdents[:i] + idents
 
-    if 'groups' in group:
-        for g in group['groups']:
-            _group_to_table(g, table, current.copy(), None)
+            i = max(len(prevNames) - len(names), 0)
+            if concat_names is None:
+                current += prevNames[:i] + names
+            else:
+                current.append(concat_names.join(prevNames[:i] + names))
+            for key, val in group['compartments'].items():
+                current.append(val)
+            table.append(current.copy())
+            current = []
+            if len(prevIdents) < len(idents):
+                prevIdents = idents.copy()
+            idents = []
+            if len(prevNames) < len(names):
+                prevNames = names.copy()
+            names = []
+    return table
 
-def groups_to_table(groups, header=True, run=None):
+def modelList_to_table(modelList, header=True, concat_names=None):
     table = []
     if header:
-        table.append(_group_to_header(groups[0], table, [], 0, run))
-    for group in groups:
-        _group_to_table(group, table, [], run)
+        table.append(_get_header(modelList[0], concat_names))
+    for model in modelList:
+        table += model_to_table(model, concat_names)
     return table
 
 def table_to_csv(table, csvfile, delimiter=',', quotechar='"',
@@ -256,59 +295,41 @@ def table_to_csv(table, csvfile, delimiter=',', quotechar='"',
         for row in table:
             out.writerow(row)
 
-def groups_to_csv(groups, csvfile, header=True, delimiter=',', quotechar='"',
-                  quoting=csv.QUOTE_MINIMAL, run=None):
-    table = groups_to_table(groups, header, run)
-    table_to_csv(table, csvfile, delimiter, quotechar, quoting)
-
-def results_to_table(results, header=True, run=None):
+def series_to_table(modelListSeries, header=True, concat_names=None):
     table = []
     if header:
-        table.append(_group_to_header(results[0][0], table, [], 0, run))
-    for result in results:
-        tbl = groups_to_table(result, False, run)
+        table.append(_get_header(modelListSeries[0][0], concat_names))
+    for modelList in modelListSeries:
+        tbl = modelList_to_table(modelList, False, concat_names)
         for row in tbl:
             table.append(row)
     return table
 
-def results_to_csv(results, csvfile, header=True, delimiter=',',
-                   quotechar='"', quoting=csv.QUOTE_MINIMAL, run=None):
-    if type(results[0][0]) == type([]): # check for result of parallel_model
-        result2 = []
-        for r in results:
-            result2 += r
-        results = result2
-    table = results_to_table(results, header, run)
+def series_to_csv(modelListSeries, csvfile, header=True, delimiter=',',
+                   quotechar='"', quoting=csv.QUOTE_MINIMAL, concat_names=None):
+    table = series_to_table(modelListSeries, header, concat_names)
     table_to_csv(table, csvfile, delimiter, quotechar, quoting)
 
-def model(groups, parameters=None, ident=None):
+def simulate(modelList, ident=None):
     results = []
-    if type(groups) == type([]):
-        for group in groups:
-            results.append(deepcopy(groups))
-    elif type(groups) == type({}):
-        results.append(deepcopy(groups))
-    else:
-        raise TypeError("First parameter must be dict or array")
+    p = deepcopy(PARAMETERS)
+    for model in modelList:
+        m = deepcopy(model)
+        if 'parameters' in m:
+            p.update(m['parameters'])
+        m['parameters'] = p
+        results.append(m)
+    return _iterate_model(results, ident)
 
-    p = PARAMETERS.copy()
-    if parameters:
-        p.update(parameters)
-    if 'parameters' in results[0]:
-        p.update(results[0]['parameters'])
+def _simulate(m):
+    return simulate(m[0], m[1])
 
-    return _iterate_model(results, p, ident)
+def simulateSeries(modelListSeries):
 
-def _parallel_model(m):
-
-    return model(m[0], m[1], m[2])
-
-def parallel_model(model):
-
-    parms = [(groups, parameters, i) for (groups, parameters), i in
-             zip(models, range(len(models)))]
-
-    with Pool() as p:
-        results = p.map(_parallel_model, parms)
-
+    mls_with_ident = [ (m[0],m[1]) for m in zip(modelListSeries,
+                                                range(len(modelListSeries)))]
+    output = Pool().map(_simulate, mls_with_ident)
+    results = []
+    for r in output:
+        results += r
     return results
