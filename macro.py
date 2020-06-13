@@ -1,55 +1,130 @@
-# Meaningful compartment prefixes:
-# S - Susceptible  (See delta_S_I and delta_S_I1)
-# E - Exposed  (See delta_S_I and delta_S_I1)
-# I - Infectious (See delta_S_I and delta_S_I1)
-# T - On treatment (See delta_S_I1 and treatment_infectiousness)
-# N - Population size. Strictly reserved. Do not prefix any compartment N.
-# D - Dead (not included in totalling N)
-# B - Birth (not tallied)
-# R - Recovered
-# M - Maternal immunity
-# V - Vaccinated
+"""Compartmental or macro modelling of infectious diseases.
+
+This module provides an API for macro or compartmental models of
+infectious disease epidemics.
+
+Users provide model specifications. The output is a time series
+showing changes to the models. This output can be converted to
+a flat table or exported to a CSV file.
+
+The main functions are:
+    * simulate - Takes a list of model specifications and ex
+    * simulateSeries - multiple lists of model specifications and
+                       runs them in parallel.
+
+Meaningful compartment prefixes
+-------------------------------
+
+S - Susceptible  (See delta_S_I and delta_S_I1)
+E - Exposed  (See delta_S_I and delta_S_I1)
+I - Infectious (See delta_S_I and delta_S_I1)
+A - Asymptomatic
+T - On treatment (See delta_S_I1 and treatment_infectiousness)
+N - Population size. Strictly reserved. Do not prefix any compartment N.
+D - Dead (not included in totalling N)
+B - Birth (not tallied)
+R - Recovered
+M - Maternal immunity
+V - Vaccinated
+
+"""
 
 import csv
 from copy import deepcopy
 import random
 from multiprocessing import Pool
-import os
+from typing import List, Dict
 
-def delta_S_I1(from_to, prod, compartments, totals, model=None):
-    from_, _ = from_to.split("_")
-    infections = 0
-    ti = model['parameters']['treatment_infectiousness']
-    for key, value in compartments.items():
-        if key[0] == 'I':
-            infections += value
-        if key[0] == 'T':
-            infections += ti * value
-    return prod * compartments[from_] * infections / totals['N']
+Model = Dict
+ModelList = List[Model]
+ModelListSeries = List[ModelList]
 
 def delta_S_I(from_to, prod, compartments, totals, model=None):
     from_, to_ = from_to.split("_")
     return prod * compartments[from_] * totals[to_] / totals['N']
 
+
 def delta_X_Y(from_to, prod, compartments, totals, model=None):
     from_, _ = from_to.split("_")
     return prod * compartments[from_]
+
 
 def delta_birth_X(from_to, prod, compartments, totals, model=None):
     _, to_ = from_to.split("_")
     return prod * compartments[to_]
 
+
+def make_parameters(dictionary: Dict) -> Dict:
+    parameters = deepcopy(PARAMETERS)
+    for key, val in dictionary.items():
+        if key in parameters:
+            if isinstance(parameters[key], dict):
+                for key2, val2 in dictionary[key].items():
+                    parameters[key][key2] = val2
+            else:
+                parameters[key] = val
+        else:
+            parameters[key] = val
+    return parameters
+
+
+def traverse(group: Dict) -> Dict:
+    yield group
+    if 'groups' in group:
+        for group in group['groups']:
+            yield from traverse(group)
+
+
+def sum_infectiousness(model: Model) -> float:
+    total = 0.0
+    ti = model['parameters']['treatment_infectiousness']
+    ai = model['parameters']['asymptomatic_infectiousness']
+    for group in traverse(model):
+        if 'compartments' in group:
+            for key, value in group['compartments'].items():
+                if key[0] == 'I':
+                    total += value
+                if key[0] == 'T':
+                    total += ti * value
+                if key[0] == 'A':
+                    total += ai * value
+    return total
+
+
+def delta_S_I1(from_to, prod, compartments, totals, model=None):
+    from_, _ = from_to.split("_")
+    infections = 0
+    ti = model['parameters']['treatment_infectiousness']
+    infections = sum_infectiousness(model)
+    return prod * compartments[from_] * infections / totals['N']
+
+
+def reduce_infectivity(model: Model):
+    reduction = model['parameters'].get('reduce_infectivity', 1.0)
+
+    for group in traverse(model):
+        if 'transitions' in group:
+            for key, value in group['transitions'].items():
+                from_, to_ = key.split("_")
+                if from_[0] == 'S' and (to_[0] == 'E' or to_[0] == 'I'):
+                    group['transitions'][key] *= reduction
+
+
+# These are the default parameters
 PARAMETERS = {
     'from': 0,
     'to': 365,
-    'record_frequency': 50,
-    'reduce_infectivity': 0.9999,
-    'treatment_infectiousness': 0.1,
+    'record_frequency': 50, # Write results every X iterations
+    # Multiply S_E or S_I by X every iteration if reduce_infectivity
+    # function executed
+    'reduce_infectivity': 1.0,
+    'asymptomatic_infectiousness': 1.0,
+    'treatment_infectiousness': 1.0,
     'noise': 0.0,
     'discrete': False,
     'record_first': True,
     'record_last': True,
-    'transition_funcs' : {
+    'transition_funcs': {
         'S_I': delta_S_I,
         'S_E': delta_S_I,
         'S_I1': delta_S_I1,
@@ -61,63 +136,49 @@ PARAMETERS = {
     'after_funcs': [],
 }
 
-def make_parameters(dictionary):
-    parameters = deepcopy(PARAMETERS)
-    for key, val in dictionary.items():
-        if key in parameters:
-            if type(parameters[key]) == type({}):
-                for key2, val2 in dictionary[key].items():
-                    parameters[key][key2] = val2
-            else:
-                parameters[key] = val
-        else:
-            parameters[key] = val
-    return parameters
 
-def traverse(group):
-    yield group
+def _update_compartments(model, totals, group=None,
+                         transitions=None, parameters=None):
+    if group is None:
+        group = model
+
+    if transitions is None:
+        transitions = {}
+    t = transitions.copy()
+    if 'transitions' in group:
+        t.update(group['transitions'])
+
+    if parameters is None:
+        parameters = {}
+    if 'parameters' in group:
+        parameters.update(group['parameters'])
+
+    if 'compartments' in group:
+        compartments = group['compartments']
+        deltas = {}
+        for key, value in t.items():
+            func = None
+            if key in parameters['transition_funcs']:
+                func = parameters['transition_funcs'][key]
+            else:
+                func = parameters['transition_funcs']['default']
+            val = func(key, value, compartments, totals, model)
+            noise = parameters['noise']
+            if noise:
+                val *= random.uniform(1.0 - noise, 1.0 + noise)
+            if parameters['discrete']:
+                val = round(val, 0)
+            deltas[key] = val
+        for key, value in deltas.items():
+            from_, to_ = key.split("_")
+            compartments[from_] -= value
+            compartments[to_] += value
+
     if 'groups' in group:
         for group in group['groups']:
-            yield from traverse(group)
+            _update_compartments(model, totals, group, t, parameters)
 
-def reduce_infectivity(model):
-    reduction = model['parameters'].get('reduce_infectivity',1.0)
-
-    for group in traverse(model):
-        if 'transitions' in group:
-            for key, value in group['transitions'].items():
-                from_, to_ = key.split("_")
-                if from_[0] == 'S' and (to_[0] == 'E' or to_[0] == 'I'):
-                    group['transitions'][key] *= reduction
-
-def _update_compartments(model, totals):
-    transitions = {}
-    parameters = model['parameters']
-    for group in traverse(model):
-        if 'transitions' in group:
-            transitions.update(group['transitions'])
-        if 'compartments' in group:
-            compartments = group['compartments']
-            deltas = {}
-            for key, value in transitions.items():
-                func = None
-                if key in parameters['transition_funcs']:
-                    func = parameters['transition_funcs'][key]
-                else:
-                    func = parameters['transition_funcs']['default']
-                val = func(key, value, compartments, totals, model)
-                noise = parameters['noise']
-                if noise:
-                    val *= random.uniform(1.0 - noise, 1.0 + noise)
-                if parameters['discrete']:
-                    val = round(val, 0)
-                deltas[key] = val
-            for key, value in deltas.items():
-                from_, to_ = key.split("_")
-                compartments[from_] -= value
-                compartments[to_] += value
-
-def calc_totals(model):
+def calc_totals(model: Model) -> List[float]:
     totals = {'N': 0}
     for group in traverse(model):
         if 'compartments' in group:
@@ -126,9 +187,10 @@ def calc_totals(model):
                     totals[key] += value
                 else:
                     totals[key] = value
-                if key[0] is not 'D':
+                if key[0] != 'D':
                     totals['N'] += value
     return totals
+
 
 def _sum_compartment(total_dict, compartment_prefixes):
     total = 0
@@ -136,6 +198,7 @@ def _sum_compartment(total_dict, compartment_prefixes):
         if key[0] in compartment_prefixes:
             total += value
     return total
+
 
 def _R0(modelSeries):
     totals = [calc_totals(model) for model in modelSeries]
@@ -158,17 +221,19 @@ def _R0(modelSeries):
     r2 = 1 / (s / infections[r0_eq_1][2])
     r3 = 1 / (infections[r0_eq_1 - 1][1] / infections[r0_eq_1][2])
     r4 = 1 / (infections[r0_eq_1 + 1][1] / infections[r0_eq_1][2])
-    r5 = 1 / ( (infections[r0_eq_1 - 1][1] + diff) / infections[r0_eq_1][2])
+    r5 = 1 / ((infections[r0_eq_1 - 1][1] + diff) / infections[r0_eq_1][2])
     return (r0, r1, r2, r3, r4, r5)
 
+
 # This needs to be reconceptualised. Highly inaccurate for large R0
-def R0(modelListSeries):
+def R0(modelListSeries: ModelListSeries) -> List[float]:
     if len(modelListSeries) < 4:
         return None
     r0 = []
     for i in range(len(modelListSeries[0])):
         r0.append(_R0([m[i] for m in modelListSeries]))
     return r0
+
 
 def _iterate_model(modelList, ident=None):
     modelListSeries = []
@@ -216,6 +281,7 @@ def _iterate_model(modelList, ident=None):
 
     return modelListSeries
 
+
 def _get_header(model, concat_names=None):
     biggest = []
     current = []
@@ -244,7 +310,8 @@ def _get_header(model, concat_names=None):
             current = []
     return biggest
 
-def model_to_table(model, concat_names=None):
+
+def model_to_table(model: Model, concat_names=None) -> List[List]:
     table = []
     current = []
     idents = []
@@ -279,7 +346,9 @@ def model_to_table(model, concat_names=None):
             names = []
     return table
 
-def modelList_to_table(modelList, header=True, concat_names=None):
+
+def modelList_to_table(modelList: ModelList, header=True,
+                       concat_names=None) -> List[List]:
     table = []
     if header:
         table.append(_get_header(modelList[0], concat_names))
@@ -287,7 +356,8 @@ def modelList_to_table(modelList, header=True, concat_names=None):
         table += model_to_table(model, concat_names)
     return table
 
-def table_to_csv(table, csvfile, delimiter=',', quotechar='"',
+
+def table_to_csv(table: List[List], csvfile: str, delimiter=',', quotechar='"',
                  quoting=csv.QUOTE_MINIMAL):
     with open(csvfile, 'w', newline='') as csvfile:
         out = csv.writer(csvfile, delimiter=delimiter,
@@ -295,7 +365,9 @@ def table_to_csv(table, csvfile, delimiter=',', quotechar='"',
         for row in table:
             out.writerow(row)
 
-def series_to_table(modelListSeries, header=True, concat_names=None):
+
+def series_to_table(modelListSeries: ModelListSeries, header=True,
+                    concat_names=None) -> List[List]:
     table = []
     if header:
         table.append(_get_header(modelListSeries[0][0], concat_names))
@@ -305,12 +377,15 @@ def series_to_table(modelListSeries, header=True, concat_names=None):
             table.append(row)
     return table
 
-def series_to_csv(modelListSeries, csvfile, header=True, delimiter=',',
-                   quotechar='"', quoting=csv.QUOTE_MINIMAL, concat_names=None):
+
+def series_to_csv(modelListSeries: ModelListSeries, csvfile: str,
+                  header=True, delimiter=',',
+                  quotechar='"', quoting=csv.QUOTE_MINIMAL, concat_names=None):
     table = series_to_table(modelListSeries, header, concat_names)
     table_to_csv(table, csvfile, delimiter, quotechar, quoting)
 
-def simulate(modelList, ident=None):
+
+def simulate(modelList: Model, ident=None) -> ModelListSeries:
     results = []
     p = deepcopy(PARAMETERS)
     for model in modelList:
@@ -321,13 +396,15 @@ def simulate(modelList, ident=None):
         results.append(m)
     return _iterate_model(results, ident)
 
+
 def _simulate(m):
     return simulate(m[0], m[1])
 
-def simulateSeries(modelListSeries):
 
-    mls_with_ident = [ (m[0],m[1]) for m in zip(modelListSeries,
-                                                range(len(modelListSeries)))]
+def simulate_series(modelListSeries: ModelListSeries) -> ModelListSeries:
+
+    mls_with_ident = [(m[0], m[1]) for m in
+                      zip(modelListSeries, range(len(modelListSeries)))]
     output = Pool().map(_simulate, mls_with_ident)
     results = []
     for r in output:

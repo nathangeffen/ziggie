@@ -4,6 +4,7 @@ import macro
 import tempfile
 import unittest
 
+
 class TestSimple(unittest.TestCase):
 
     def simple(self):
@@ -61,9 +62,9 @@ class TestSimple(unittest.TestCase):
                                65525.67886409458,
                                "Susceptible with reduce_infectivity at 1.0")
         self.assertAlmostEqual(before_S_I, 0.6,
-                          "Infectivity reducing function before at 1.0")
+                               "Infectivity reducing function before at 1.0")
         self.assertAlmostEqual(after_S_I, 0.6,
-                          "Infectivity reducing function after at 1.0")
+                               "Infectivity reducing function after at 1.0")
 
         parameters['reduce_infectivity'] = 0.99
         simp = self.simple()
@@ -73,16 +74,17 @@ class TestSimple(unittest.TestCase):
         after_S_I = res[-1][0]['transitions']['S_I']
         self.assertAlmostEqual(res[-1][0]['compartments']['S'],
                                2894902.5260503027,
-                               msg="Susceptible with reduce_infectivity at 0.99")
+                               msg="Susceptible with reduce_infectivity==0.99")
         self.assertAlmostEqual(before_S_I, 0.6,
-                               msg="Infectivity reducing function before at 1.0")
+                               msg="Infectivity reduction before")
         self.assertAlmostEqual(after_S_I, 0.015310778671374667,
-                          msg="Infectivity reducing function at 0.99")
+                               msg="Infectivity reduction after")
+
 
 class TestComplicated(unittest.TestCase):
 
     def complicated(self):
-        return  {
+        return {
             'name': 'Van Wyks Dorp',
             'groups': [
                 {
@@ -148,7 +150,7 @@ class TestComplicated(unittest.TestCase):
         generator = macro.traverse(groups)
         lst = list(generator)
         self.assertEqual(len(lst), 8, "Test traverse yields all groups")
-        lst2 = [l['name'] for l in lst if 'name' in l]
+        lst2 = [l1['name'] for l1 in lst if 'name' in l1]
         self.assertEqual(len(lst2), 7, "Test traverse yields correct groups")
 
     def test_simulate(self):
@@ -160,8 +162,8 @@ class TestComplicated(unittest.TestCase):
         self.assertEqual(res[1][0]['iteration'], 50)
         self.assertEqual(res[-1][0]['iteration'], 365)
         self.assertEqual(res[-2][0]['iteration'], 350)
-        self.assertEqual(len(res),9)
-        self.assertEqual(len(res[0]),1)
+        self.assertEqual(len(res), 9)
+        self.assertEqual(len(res[0]), 1)
         totals = macro.calc_totals(res[-2][0])
 
         self.assertAlmostEqual(totals['N'], 1091.0,
@@ -195,6 +197,7 @@ class TestComplicated(unittest.TestCase):
             self.assertEqual(table[0], t[0])
             for pair in zip(table[-1], t[-5]):
                 self.assertEqual(str(pair[0]), str(pair[1]))
+
 
 class TestNoise(unittest.TestCase):
 
@@ -233,6 +236,7 @@ class TestNoise(unittest.TestCase):
                            msg="Random fluctuations give reasonable result")
         self.assertGreater(80000.0, table[1][2],
                            msg="Random fluctuations give reasonable result")
+
 
 class TestGranich(unittest.TestCase):
 
@@ -286,7 +290,7 @@ class TestGranich(unittest.TestCase):
             },
             'parameters': macro.make_parameters({
                 'to': 365*20,
-                'after_funcs':[macro.reduce_infectivity,],
+                'after_funcs': [macro.reduce_infectivity, ],
                 'reduce_infectivity': 0.9999,
                 'treatment_infectiousness': 0.001,
                 'noise': 0.1
@@ -309,7 +313,7 @@ class TestGranich(unittest.TestCase):
 
         totals_before_t = macro.calc_totals(results_treat[0][0])
         totals_after_t = macro.calc_totals(results_treat[-1][0])
-        n_before = sum([value for key,value in totals_before_t.items()
+        n_before = sum([value for key, value in totals_before_t.items()
                         if key != 'N'])
         n_after = sum([value for key, value in totals_after_t.items()
                        if key != 'N'])
@@ -318,7 +322,7 @@ class TestGranich(unittest.TestCase):
 
         totals_before_d = macro.calc_totals(results_deferred[0][0])
         totals_after_d = macro.calc_totals(results_deferred[-1][0])
-        n_before = sum([value for key,value in totals_before_d.items()
+        n_before = sum([value for key, value in totals_before_d.items()
                         if key != 'N'])
         n_after = sum([value for key, value in totals_after_d.items()
                        if key != 'N'])
@@ -331,6 +335,247 @@ class TestGranich(unittest.TestCase):
         self.assertGreater(totals_after_d['DT'], totals_after_t['DT'])
         self.assertGreater(totals_after_t['N'], totals_after_d['N'])
         self.assertGreater(-totals_after_t['B'], -totals_after_d['B'])
+
+
+class TestCorona(unittest.TestCase):
+
+    def corona(self):
+
+        return {
+            'name': 'South African Covid-19',
+            'parameters': macro.make_parameters({
+                'to': 365,
+                'record_frequency': 1,
+                'record_last': False,
+                'noise': 0.1,
+                'asymptomatic_infectiousness': 0.75,
+                'reduce_infectivity': 0.999,
+                'after_funcs': [macro.reduce_infectivity, ],
+                'transition_funcs': {
+                    'S_E': macro.delta_S_I1,
+                }
+            }),
+            'transitions': {
+                'S_E': 0.31,
+                'E_A': 0.125,
+                'E_Im': 0.125,
+                'Im_Ic': 0.2,
+                'Ic_R': 0.2,
+                'A_R': 0.2
+            },
+            'groups': [
+                {
+                    'name': 'Urban informal',
+                    'transitions': {
+                        'S_E': 0.45,
+                    },
+                    'groups': [
+                        {
+                            'name': '0-24',
+                            'transitions': {
+                                'E_A': 0.25,
+                                'E_Im': 0.01,
+                                'Ic_D': 0.002
+                            },
+                            'compartments': {
+                                'S': 2100000,
+                                'E': 10,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        },
+                        {
+                            'name': '25-54',
+                            'transitions': {
+                                'Ic_D': 0.003
+                            },
+                            'compartments': {
+                                'S': 2100000,
+                                'E': 0,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        },
+                        {
+                            'name': '55-',
+                            'transitions': {
+                                'Ic_D': 0.03
+                            },
+                            'compartments': {
+                                'S': 600000,
+                                'E': 0,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        }
+                    ]
+                },
+                {
+                    'name': 'Urban formal',
+                    'groups': [
+                        {
+                            'name': '0-24',
+                            'transitions': {
+                                'E_A': 0.25,
+                                'E_Im': 0.01,
+                                'Ic_D': 0.002
+                            },
+                            'compartments': {
+                                'S': 16940000,
+                                'E': 0,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        },
+                        {
+                            'name': '25-54',
+                            'transitions': {
+                                'Ic_D': 0.003
+                            },
+                            'compartments': {
+                                'S': 16940000,
+                                'E': 0,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        },
+                        {
+                            'name': '55-',
+                            'transitions': {
+                                'Ic_D': 0.03
+                            },
+                            'compartments': {
+                                'S': 4620000,
+                                'E': 0,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        }
+                    ]
+                },
+                {
+                    'name': 'Rural',
+                    'transitions': {
+                        'S_E': 0.2,
+                    },
+                    'groups': [
+                        {
+                            'name': '0-24',
+                            'transitions': {
+                                'E_A': 0.25,
+                                'E_Im': 0.01,
+                                'Ic_D': 0.002
+                            },
+                            'compartments': {
+                                'S': 7260000,
+                                'E': 10,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        },
+                        {
+                            'name': '25-54',
+                            'transitions': {
+                                'Ic_D': 0.003
+                            },
+                            'compartments': {
+                                'S': 7260000,
+                                'E': 0,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        },
+                        {
+                            'name': '55-',
+                            'transitions': {
+                                'Ic_D': 0.03
+                            },
+                            'compartments': {
+                                'S': 2000000,
+                                'E': 0,
+                                'Im': 0,
+                                'Ic': 0,
+                                'A': 0,
+                                'R': 0,
+                                'D': 0
+                            }
+                        }
+
+                    ]
+                }
+            ]
+        }
+
+    def check_results(self, results):
+        self.assertEqual(len(results), 366)
+        N = macro.calc_totals(results[0][0])['N']
+        totals = macro.calc_totals(results[-1][0])
+        self.assertAlmostEqual(N, totals['N'] + totals['D'], 5)
+        self.assertGreater(totals['D'],  70000)
+        self.assertLess(totals['D'], 100000)
+        # Check that informal settlement > urban > rural
+        proportions = [
+            t['D'] / t['N'] for t in
+            [macro.calc_totals(results[-1][0]['groups'][i])
+             for i in range(3)]
+        ]
+        self.assertTrue(proportions[0] > proportions[1])
+        self.assertTrue(proportions[1] > proportions[2])
+        self.assertGreater(proportions[2], 0.0008)
+
+    def test_simulate(self):
+        results = macro.simulate([self.corona()])
+        self.assertEqual(len(results), 366)
+        self.check_results(results)
+
+    def test_parallel(self):
+        resultSeries = macro.simulate_series([[TestCorona().corona(),
+                                               TestCorona().corona()]
+                                              for _ in range(10)])
+        self.assertEqual(len(resultSeries), 3660)
+        self.assertEqual(len(resultSeries[0]), 2)
+        self.assertEqual(len(resultSeries[3659]), 2)
+        results = [r for r in resultSeries if r[0]['iteration'] == 365]
+        self.assertEqual(len(results), 10)
+        for i in range(1,len(results)):
+            totals_0 = macro.calc_totals(results[i - 1][0])
+            totals_1 = macro.calc_totals(results[i][0])
+            self.assertNotEqual(totals_0['N'], totals_1['N'])
+            totals_0 = macro.calc_totals(results[i][0])
+            totals_1 = macro.calc_totals(results[i][1])
+            self.assertNotEqual(totals_0['N'], totals_1['N'])
+
+
+
+        for i in range(10):
+            results = [r for r in resultSeries if r[0]['ident'] == i]
+            self.check_results(results)
+            results = [r for r in resultSeries if r[1]['ident'] == i]
+            self.check_results(results)
 
 if __name__ == '__main__':
     unittest.main()
