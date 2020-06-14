@@ -287,13 +287,13 @@ class TestGranich(unittest.TestCase):
 
                 'B_S': (1000000/50000000)/365.25
             },
-            'parameters': macro.make_parameters({
+            'parameters': {
                 'to': 365*20,
                 'after_funcs': [macro.reduce_infectivity, ],
                 'reduce_infectivity': 0.9999,
                 'treatment_infectiousness': 0.001,
                 'noise': 0.1
-            }),
+            },
         }
 
         if treat_only_I4:
@@ -342,7 +342,7 @@ class TestCorona(unittest.TestCase):
 
         return {
             'name': 'South African Covid-19',
-            'parameters': macro.make_parameters({
+            'parameters': {
                 'to': 365,
                 'record_frequency': 1,
                 'record_last': False,
@@ -353,7 +353,7 @@ class TestCorona(unittest.TestCase):
                 'transition_funcs': {
                     'S_E': macro.delta_S_I1,
                 }
-            }),
+            },
             'transitions': {
                 'S_E': 0.31,
                 'E_A': 0.125,

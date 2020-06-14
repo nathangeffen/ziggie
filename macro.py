@@ -1,4 +1,4 @@
-'''Compartmental or macro modelling of infectious diseases.
+"""Compartmental or macro modelling of infectious diseases.
 
 This module provides an API for macro or compartmental models of
 infectious disease epidemics.
@@ -61,7 +61,7 @@ This is complicated one showing many of the features of a model specification.
 
 {
     'name': 'South African Covid-19',
-    'parameters': macro.make_parameters({
+    'parameters': {
         'to': 365,
         'record_frequency': 1,
         'record_last': False,
@@ -72,7 +72,7 @@ This is complicated one showing many of the features of a model specification.
         'transition_funcs': {
             'S_E': macro.delta_S_I1,
         }
-    }),
+    },
     'transitions': {
         'S_E': 0.31,
         'E_A': 0.125,
@@ -313,49 +313,73 @@ R - Recovered
 M - Maternal immunity
 V - Vaccinated
 
-'''
+"""
 
 import csv
 from copy import deepcopy
 import random
 from multiprocessing import Pool
-from typing import List, Dict
+from typing import List, Dict, Generator
 import os
 
 Model = Dict
+Group = Dict
 ModelList = List[Model]
 ModelListSeries = List[ModelList]
 
 
 def delta_S_I(from_to, beta, compartments, totals, model=None):
-    '''Returns number of new infections.
+    """Return number of new infections.
 
     Parameters:
-    from_to: (str): transition name consisting of two compartment names
+    from_to (str): transition name consisting of two compartment names
                     separated by an underscore (e.g. S_Ic)
-    prop: (float): effective contact rate
+    beta (float): effective contact rate
     compartments (dict): dictionary of compartments including the two
                          specified in from_to
     totals (dict): dictionary containing a key 'N' that is the sum of the
                    total population for this model.
-    '''
+    model (Model): Unused but part of function signature
+    """
     from_, to_ = from_to.split("_")
     return beta * compartments[from_] * totals[to_] / totals['N']
 
 
-def delta_X_Y(from_to, prod, compartments, totals, model=None):
-    '''
-    '''
+def delta_X_Y(from_to, prop, compartments, totals, model=None):
+    """Return number individuals to be moved from one compartment to another.
+
+    Parameters:
+    from_to (str): transition name consisting of two compartment names
+                    separated by an underscore (e.g. I_R)
+    prop (float): proportion of "from" compartment to move
+    compartments (dict): dictionary of compartments including the two
+                         specified in from_to
+    totals (dict): Unused but part of function signature
+    model (Model): Unused but part of function signature
+    """
     from_, _ = from_to.split("_")
-    return prod * compartments[from_]
+    return prop * compartments[from_]
 
 
-def delta_birth_X(from_to, prod, compartments, totals, model=None):
+def delta_birth_X(from_to, prop, compartments, totals, model=None):
+    """Return number new individuals in a population.
+
+    Parameters:
+    from_to (str): transition name consisting of a compartment name
+                   starting with a B followed by an underscore
+                   then another compartment, typically B_S (for
+                   number of births in susceptible population)
+    prop (float): proportion of "to" compartment that will be added
+    compartments (dict): dictionary of compartments including the "from"
+                         part of the from_to
+    totals (dict): Unused but part of function signature
+    model (Model): Unused but part of function signature
+    """
     _, to_ = from_to.split("_")
-    return prod * compartments[to_]
+    return prop * compartments[to_]
 
 
-def make_parameters(dictionary: Dict) -> Dict:
+def _make_parameters(dictionary: Dict) -> Dict:
     parameters = deepcopy(PARAMETERS)
     for key, val in dictionary.items():
         if key in parameters:
@@ -369,7 +393,12 @@ def make_parameters(dictionary: Dict) -> Dict:
     return parameters
 
 
-def traverse(group: Dict) -> Dict:
+def traverse(group: Group) -> Generator[Group, None, None]:
+    """Generate all the groups of a model or group.
+
+    Parameters:
+    group: the group whose subgroups to traverse
+    """
     yield group
     if 'groups' in group:
         for group in group['groups']:
@@ -377,6 +406,17 @@ def traverse(group: Dict) -> Dict:
 
 
 def sum_infectiousness(model: Model) -> float:
+    """Return weighted sum of all infection compartments.
+
+    The infection compartments are all those that begin with an 'I'
+    (infectious), 'A' (asymptomatic) or 'T' (treatment).
+    Each 'A' compartment is multipled by the parameter
+    asymptomatic_infectiousness. Each 'T' compartment is multiplied by
+    the parameter treatment_infectiousness.
+
+    Parameters:
+    model: the model to sum
+    """
     total = 0.0
     ti = model['parameters']['treatment_infectiousness']
     ai = model['parameters']['asymptomatic_infectiousness']
@@ -392,14 +432,47 @@ def sum_infectiousness(model: Model) -> float:
     return total
 
 
-def delta_S_I1(from_to, prod, compartments, totals, model=None):
+def delta_S_I1(from_to, beta, compartments, totals, model=None):
+    """Return number of new infections.
+
+    In contrast to delta_S_I this function calculates the weighted
+    infectiousness of the population. In other words it calculates::
+
+    number susceptible * effective contact rate per iteration *
+    sum_infectiousness(model) / total population
+
+    Parameters:
+    from_to (str): transition name consisting of two compartment names
+                    separated by an underscore (e.g. S_I1)
+    beta (float): effective contact rate per iteration
+    compartments (dict): dictionary of compartments including the two
+                         specified in from_to
+    totals (dict): dictionary containing a key 'N' that is the sum of the
+                   total population for this model.
+    model (Model): model to calculate total infectiousness for
+    """
     from_, _ = from_to.split("_")
     infections = 0
     infections = sum_infectiousness(model)
-    return prod * compartments[from_] * infections / totals['N']
+    return beta * compartments[from_] * infections / totals['N']
 
 
-def reduce_infectivity(model: Model):
+def reduce_infectivity(model: Model, modelList=None):
+    """Reduce the values of the effective contact rates of a model.
+
+    This is an optional function to be executed before or after each
+    iteration. To use it, add it to the after_funcs or before_funcs
+    parameters. It traverses the model aand reduces the value of
+    all parameters of the S(.*)_[(E|I)(.*) by multiplying them
+    by the 'reduce_infectivity' parameter.
+    This is meant to simulate the fact that in heterogeneous
+    populations, the most susceptible will be infected first.
+
+    Parameters
+    model (Model): the model to apply the reductions to
+    modelList (ModelList): Unused but part of function signature
+
+    """
     reduction = model['parameters'].get('reduce_infectivity', 1.0)
 
     for group in traverse(model):
@@ -480,6 +553,11 @@ def _update_compartments(model, totals, group=None,
 
 
 def calc_totals(model: Model) -> List[float]:
+    """Calculate sum of each compartment in all groups and return dict.
+
+    This function traverses a model and calculates the sum of each compartment
+    across all the groups. It also calculates N, the total living population.
+    """
     totals = {'N': 0}
     for group in traverse(model):
         if 'compartments' in group:
@@ -526,8 +604,11 @@ def _R0(modelSeries):
     return (r0, r1, r2, r3, r4, r5)
 
 
-# This needs to be reconceptualised. Highly inaccurate for large R0
 def R0(modelListSeries: ModelListSeries) -> List[float]:
+    """Calculate R0 for a time series of model outputs.
+
+    Highly inaccurate and needs to be reconceptualised. Don't use for now.
+    """
     if len(modelListSeries) < 4:
         return None
     r0 = []
@@ -560,11 +641,11 @@ def _iterate_model(modelList, ident=None):
             if ident is not None:
                 model['ident'] = ident
             for func in model['parameters']['before_funcs']:
-                func(model)
+                func(model, modelList)
             totals = calc_totals(model)
             _update_compartments(model, totals)
             for func in model['parameters']['after_funcs']:
-                func(model)
+                func(model, modelList)
             if (iteration + 1) % model['parameters']['record_frequency'] == 0:
                 iterationModelList.append(model)
         if len(iterationModelList) > 0:
@@ -613,6 +694,17 @@ def _get_header(model, concat_names=None):
 
 
 def model_to_table(model: Model, concat_names=None) -> List[List]:
+    """Create and return a table from a model.
+
+    This converts a model to list of lists, where each list corresponds
+    to a group in the model. This is also an interim step to converting
+    a model output to a csv file.
+
+    Parameters
+    model (Model): model to convert
+    concat_names (str): if not None then group names are concatenated,
+                        separated by this string
+    """
     table = []
     current = []
     idents = []
@@ -650,6 +742,20 @@ def model_to_table(model: Model, concat_names=None) -> List[List]:
 
 def modelList_to_table(modelList: ModelList, header=True,
                        concat_names=None) -> List[List]:
+    """Create and return a table from a list of models.
+
+    This function "flattens" a list of models so that each row in the
+    table corresponds to a group in each of the models in the list.
+    It's especially useful for analysing the model output, for
+    example with numpy. It is also an interim step to converting a
+    list of model to a comma-separated file.
+
+    Parameters
+    modelList (ModelList): list of models to convert
+    header (bool): whether or not the first row should be a header
+    concat_names (str): if not None then group names are concatenated,
+                        separated by this string
+    """
     table = []
     if header:
         table.append(_get_header(modelList[0], concat_names))
@@ -688,12 +794,9 @@ def series_to_csv(modelListSeries: ModelListSeries, csvfile: str,
 
 def simulate(modelList: Model, ident=None) -> ModelListSeries:
     results = []
-    p = deepcopy(PARAMETERS)
     for model in modelList:
         m = deepcopy(model)
-        if 'parameters' in m:
-            p.update(m['parameters'])
-        m['parameters'] = p
+        m['parameters'] = _make_parameters(m.get('parameters', {}))
         results.append(m)
     return _iterate_model(results, ident)
 
