@@ -560,22 +560,18 @@ class TestCorona(unittest.TestCase):
         self.assertEqual(len(resultSeries[0]), 2)
         self.assertEqual(len(resultSeries[3659]), 2)
         results = [r for r in resultSeries if r[0]['iteration'] == 365]
-        self.assertEqual(len(results), 10)
-        for i in range(1,len(results)):
-            totals_0 = macro.calc_totals(results[i - 1][0])
-            totals_1 = macro.calc_totals(results[i][0])
-            self.assertNotEqual(totals_0['N'], totals_1['N'])
-            totals_0 = macro.calc_totals(results[i][0])
-            totals_1 = macro.calc_totals(results[i][1])
-            self.assertNotEqual(totals_0['N'], totals_1['N'])
 
-
+        N_0 = macro.calc_totals(results[0][0])['N']
+        N_1 = macro.calc_totals(results[1][0])['N']
+        self.assertNotEqual(N_0, N_1)
+        self.assertLess(abs(N_0 - N_1), 15000)
 
         for i in range(10):
             results = [r for r in resultSeries if r[0]['ident'] == i]
             self.check_results(results)
             results = [r for r in resultSeries if r[1]['ident'] == i]
             self.check_results(results)
+
 
 if __name__ == '__main__':
     unittest.main()

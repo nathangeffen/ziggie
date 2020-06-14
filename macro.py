@@ -405,7 +405,8 @@ def simulate_series(modelListSeries: ModelListSeries) -> ModelListSeries:
 
     mls_with_ident = [(m[0], m[1]) for m in
                       zip(modelListSeries, range(len(modelListSeries)))]
-    output = Pool().map(_simulate, mls_with_ident)
+    with Pool() as pool:
+        output = pool.map(_simulate, mls_with_ident)
     results = []
     for r in output:
         results += r
