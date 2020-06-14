@@ -34,10 +34,12 @@ from copy import deepcopy
 import random
 from multiprocessing import Pool
 from typing import List, Dict
+import os
 
 Model = Dict
 ModelList = List[Model]
 ModelListSeries = List[ModelList]
+
 
 def delta_S_I(from_to, prod, compartments, totals, model=None):
     from_, to_ = from_to.split("_")
@@ -94,7 +96,6 @@ def sum_infectiousness(model: Model) -> float:
 def delta_S_I1(from_to, prod, compartments, totals, model=None):
     from_, _ = from_to.split("_")
     infections = 0
-    ti = model['parameters']['treatment_infectiousness']
     infections = sum_infectiousness(model)
     return prod * compartments[from_] * infections / totals['N']
 
@@ -114,7 +115,7 @@ def reduce_infectivity(model: Model):
 PARAMETERS = {
     'from': 0,
     'to': 365,
-    'record_frequency': 50, # Write results every X iterations
+    'record_frequency': 50,  # Write results every X iterations
     # Multiply S_E or S_I by X every iteration if reduce_infectivity
     # function executed
     'reduce_infectivity': 1.0,
@@ -177,6 +178,7 @@ def _update_compartments(model, totals, group=None,
     if 'groups' in group:
         for group in group['groups']:
             _update_compartments(model, totals, group, t, parameters)
+
 
 def calc_totals(model: Model) -> List[float]:
     totals = {'N': 0}
@@ -401,11 +403,12 @@ def _simulate(m):
     return simulate(m[0], m[1])
 
 
-def simulate_series(modelListSeries: ModelListSeries) -> ModelListSeries:
+def simulate_series(modelListSeries: ModelListSeries,
+                    processes=os.cpu_count()) -> ModelListSeries:
 
     mls_with_ident = [(m[0], m[1]) for m in
                       zip(modelListSeries, range(len(modelListSeries)))]
-    with Pool() as pool:
+    with Pool(processes=processes) as pool:
         output = pool.map(_simulate, mls_with_ident)
     results = []
     for r in output:

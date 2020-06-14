@@ -1,5 +1,4 @@
 import csv
-from copy import deepcopy
 import macro
 import tempfile
 import unittest
