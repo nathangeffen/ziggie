@@ -552,7 +552,7 @@ def _update_compartments(model, totals, group=None,
             _update_compartments(model, totals, group, t, parameters)
 
 
-def calc_totals(model: Model) -> List[float]:
+def calc_totals(model: Model) -> Dict[str, float]:
     """Calculate sum of each compartment in all groups and return dict.
 
     This function traverses a model and calculates the sum of each compartment
@@ -569,6 +569,45 @@ def calc_totals(model: Model) -> List[float]:
                 if key[0] != 'D':
                     totals['N'] += value
     return totals
+
+
+def grand_sum_totals(totals: List[Dict[str, float]],
+                     ignore=['B', 'N']) ->float:
+    """Calculate the sum of all compartments.
+
+    Takes the output list generated using calc_totals and calculates the sum of
+    all the compartments.
+
+    E.g. print(grand_sum_totals([calc_totals[m] for m in model_list])
+
+    Parameters:
+    totals (output of calc_totals): list of compartment totals across models
+    ignore (list of str): list of compartments to ignore
+
+    """
+    total = 0.0
+    for t in totals:
+        for key, value in t.items():
+            if key not in ignore:
+                total += value
+    return total
+
+def sum_totals(totals: List[Dict[str, float]]) -> List[Dict[str, float]]:
+    """Calculate the sum of compartments across multiple models.
+
+    Takes the output list generated using calc_totals and calculates the sum of
+    each the compartments.
+
+    E.g. print(sum_totals([calc_totals[m] for m in model_list])
+
+    Parameters:
+    totals (output of calc_totals): list of compartment totals across models
+    """
+    result = {}
+    for t in totals:
+        for key, value in t.items():
+            result[key] = result.get(key, 0) + value
+    return result
 
 
 def _sum_compartment(total_dict, compartment_prefixes):

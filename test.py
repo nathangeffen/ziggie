@@ -11,7 +11,9 @@ Requires Python 3.5 or higher.
 """
 
 import csv
+from copy import deepcopy
 import macro
+import random
 import tempfile
 import unittest
 
@@ -337,8 +339,8 @@ class TestGranich(unittest.TestCase):
                         if key != 'N'])
         n_after = sum([value for key, value in totals_after_d.items()
                        if key != 'N'])
-        self.assertAlmostEqual(n_before, n_after, 6)
-        self.assertAlmostEqual(n_after, 36000000, 6)
+        self.assertAlmostEqual(n_before, n_after, 5)
+        self.assertAlmostEqual(n_after, 36000000, 5)
 
         self.assertGreater(totals_after_t['DI'], 1000)
         self.assertGreater(totals_after_t['DT'], 1000)
@@ -348,234 +350,293 @@ class TestGranich(unittest.TestCase):
         self.assertGreater(-totals_after_t['B'], -totals_after_d['B'])
 
 
+def mix_models(model, modelList):
+
+    def _calc(val1, val2, prop, noise):
+        result = min(val1, val2) * prop
+        result *= random.uniform(1.0 - noise, 1.0 + noise)
+        return result
+
+    noise = model['parameters']['noise']
+    deltas = {}
+    informal = modelList[0]['groups']
+    formal = modelList[1]['groups']
+    rural = modelList[2]['groups']
+
+    for i in range(len(informal)):
+        for key in informal[i]['compartments']:
+            if key in ['S', 'E', 'Im', 'A', 'R']:
+                delta_f_i = _calc(informal[i]['compartments'][key],
+                                  formal[i]['compartments'][key], 0.02,
+                                  noise)
+                delta_i_r = _calc(informal[i]['compartments'][key],
+                                  rural[i]['compartments'][key], 0.01,
+                                  noise)
+                delta_r_f = _calc(formal[i]['compartments'][key],
+                                  rural[i]['compartments'][key], 0.01,
+                                  noise)
+
+                if model['iteration'] % 2 == 0:
+                    delta_f_i = -delta_f_i
+                    delta_i_r = -delta_i_r
+                    delta_r_f = -delta_r_f
+
+
+                formal[i]['compartments'][key] += delta_f_i
+                informal[i]['compartments'][key] -= delta_f_i
+
+                informal[i]['compartments'][key] += delta_i_r
+                rural[i]['compartments'][key] -= delta_i_r
+
+                rural[i]['compartments'][key] += delta_r_f
+                formal[i]['compartments'][key] -= delta_r_f
+
+
 class TestCorona(unittest.TestCase):
 
     def corona(self):
-
-        return {
-            'name': 'Community  Covid-19',
-            'parameters': {
-                'to': 365,
-                'record_frequency': 1,
-                'record_last': False,
-                'noise': 0.1,
-                'asymptomatic_infectiousness': 0.75,
-                'reduce_infectivity': 0.999,
-                'after_funcs': [macro.reduce_infectivity, ],
-                'transition_funcs': {
-                    'S_E': macro.delta_S_I1,
-                }
-            },
-            'transitions': {
-                'S_E': 0.31,
-                'E_A': 0.125,
-                'E_Im': 0.125,
-                'Im_Ic': 0.2,
-                'Ic_R': 0.2,
-                'A_R': 0.2
-            },
-            'groups': [
-                {
-                    'name': 'Urban informal',
-                    'transitions': {
-                        'S_E': 0.45,
-                    },
-                    'groups': [
-                        {
-                            'name': '0-24',
-                            'transitions': {
-                                'E_A': 0.25,
-                                'E_Im': 0.01,
-                                'Ic_D': 0.002
-                            },
-                            'compartments': {
-                                'S': 2100000,
-                                'E': 10,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        },
-                        {
-                            'name': '25-54',
-                            'transitions': {
-                                'Ic_D': 0.003
-                            },
-                            'compartments': {
-                                'S': 2100000,
-                                'E': 0,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        },
-                        {
-                            'name': '55-',
-                            'transitions': {
-                                'Ic_D': 0.03
-                            },
-                            'compartments': {
-                                'S': 600000,
-                                'E': 0,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        }
-                    ]
-                },
-                {
-                    'name': 'Urban formal',
-                    'groups': [
-                        {
-                            'name': '0-24',
-                            'transitions': {
-                                'E_A': 0.25,
-                                'E_Im': 0.01,
-                                'Ic_D': 0.002
-                            },
-                            'compartments': {
-                                'S': 16940000,
-                                'E': 0,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        },
-                        {
-                            'name': '25-54',
-                            'transitions': {
-                                'Ic_D': 0.003
-                            },
-                            'compartments': {
-                                'S': 16940000,
-                                'E': 0,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        },
-                        {
-                            'name': '55-',
-                            'transitions': {
-                                'Ic_D': 0.03
-                            },
-                            'compartments': {
-                                'S': 4620000,
-                                'E': 0,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        }
-                    ]
-                },
-                {
-                    'name': 'Rural',
-                    'transitions': {
-                        'S_E': 0.2,
-                    },
-                    'groups': [
-                        {
-                            'name': '0-24',
-                            'transitions': {
-                                'E_A': 0.25,
-                                'E_Im': 0.01,
-                                'Ic_D': 0.002
-                            },
-                            'compartments': {
-                                'S': 7260000,
-                                'E': 10,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        },
-                        {
-                            'name': '25-54',
-                            'transitions': {
-                                'Ic_D': 0.003
-                            },
-                            'compartments': {
-                                'S': 7260000,
-                                'E': 0,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        },
-                        {
-                            'name': '55-',
-                            'transitions': {
-                                'Ic_D': 0.03
-                            },
-                            'compartments': {
-                                'S': 2000000,
-                                'E': 0,
-                                'Im': 0,
-                                'Ic': 0,
-                                'A': 0,
-                                'R': 0,
-                                'D': 0
-                            }
-                        }
-
-                    ]
-                }
-            ]
+        parameters =  {
+            'to': 365,
+            'record_frequency': 1,
+            'record_last': False,
+            'noise': 0.1,
+            'asymptomatic_infectiousness': 0.75,
+            'reduce_infectivity': 0.999,
+            'after_funcs': [macro.reduce_infectivity, ],
+            'transition_funcs': {
+                'S_E': macro.delta_S_I1,
+            }
         }
+
+        parameters_rural = deepcopy(parameters)
+        parameters_rural['after_funcs'] = [macro.reduce_infectivity,
+                                           mix_models, ]
+        return [
+            {
+                'name': 'Urban informal',
+                'parameters': parameters,
+                'transitions': {
+                    'S_E': 0.4,
+                    'E_A': 0.125,
+                    'E_Im': 0.125,
+                    'Im_Ic': 0.2,
+                    'Ic_R': 0.2,
+                    'A_R': 0.2
+                },
+                'groups': [
+                    {
+                        'name': '0-24',
+                        'transitions': {
+                            'E_A': 0.25,
+                            'E_Im': 0.01,
+                            'Ic_D': 0.002
+                        },
+                        'compartments': {
+                            'S': 2100000,
+                            'E': 10,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    },
+                    {
+                        'name': '25-54',
+                        'transitions': {
+                            'Ic_D': 0.0032
+                        },
+                        'compartments': {
+                            'S': 2100000,
+                            'E': 0,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    },
+                    {
+                        'name': '55-',
+                        'transitions': {
+                            'Ic_D': 0.032
+                        },
+                        'compartments': {
+                            'S': 600000,
+                            'E': 0,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    }
+                ]
+            },
+            {
+                'name': 'Urban formal',
+                'parameters': parameters,
+                'transitions': {
+                    'S_E': 0.3,
+                    'E_A': 0.125,
+                    'E_Im': 0.125,
+                    'Im_Ic': 0.2,
+                    'Ic_R': 0.2,
+                    'A_R': 0.2
+                },
+                'groups': [
+                    {
+                        'name': '0-24',
+                        'transitions': {
+                            'E_A': 0.25,
+                            'E_Im': 0.01,
+                            'Ic_D': 0.002
+                        },
+                        'compartments': {
+                            'S': 16940000,
+                            'E': 10,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    },
+                    {
+                        'name': '25-54',
+                        'transitions': {
+                            'Ic_D': 0.003
+                        },
+                        'compartments': {
+                            'S': 16940000,
+                            'E': 0,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    },
+                    {
+                        'name': '55-',
+                        'transitions': {
+                            'Ic_D': 0.03
+                        },
+                        'compartments': {
+                            'S': 4620000,
+                            'E': 0,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    }
+                ]
+            },
+            {
+                'name': 'Rural',
+                'parameters': parameters_rural,
+                'transitions': {
+                    'S_E': 0.27,
+                    'E_A': 0.125,
+                    'E_Im': 0.125,
+                    'Im_Ic': 0.2,
+                    'Ic_R': 0.2,
+                    'A_R': 0.2
+                },
+                'groups': [
+                    {
+                        'name': '0-24',
+                        'transitions': {
+                            'E_A': 0.25,
+                            'E_Im': 0.01,
+                            'Ic_D': 0.002
+                        },
+                        'compartments': {
+                            'S': 7260000,
+                            'E': 10,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    },
+                    {
+                        'name': '25-54',
+                        'transitions': {
+                            'Ic_D': 0.0035
+                        },
+                        'compartments': {
+                            'S': 7260000,
+                            'E': 0,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    },
+                    {
+                        'name': '55-',
+                        'transitions': {
+                            'Ic_D': 0.035
+                        },
+                        'compartments': {
+                            'S': 2000000,
+                            'E': 0,
+                            'Im': 0,
+                            'Ic': 0,
+                            'A': 0,
+                            'R': 0,
+                            'D': 0
+                        }
+                    }
+
+                ]
+            }
+        ]
+
 
     def check_results(self, results):
         self.assertEqual(len(results), 366)
-        N = macro.calc_totals(results[0][0])['N']
-        totals = macro.calc_totals(results[-1][0])
-        self.assertAlmostEqual(N, totals['N'] + totals['D'], 5)
-        self.assertGreater(totals['D'],  70000)
-        self.assertLess(totals['D'], 100000)
+        Nb = macro.grand_sum_totals([macro.calc_totals(m)
+                                     for m in results[0]])
+        Na = macro.grand_sum_totals([macro.calc_totals(m)
+                                     for m in results[-1]])
+        self.assertAlmostEqual(Nb, Na, 5)
+        totals = macro.sum_totals([macro.calc_totals(m)
+                                   for m in results[-1]])
+        self.assertGreater(totals['D'],  100000)
+        self.assertLess(totals['D'], 160000)
         # Check that informal settlement > urban > rural
         proportions = [
             t['D'] / t['N'] for t in
-            [macro.calc_totals(results[-1][0]['groups'][i])
-             for i in range(3)]
+            [macro.calc_totals(m) for m in results[-1]]
         ]
+
         self.assertTrue(proportions[0] > proportions[1])
         self.assertTrue(proportions[1] > proportions[2])
-        self.assertGreater(proportions[2], 0.0008)
+        self.assertGreater(proportions[2], 0.00015)
 
     def test_simulate(self):
-        results = macro.simulate([self.corona()])
+        results = macro.simulate(self.corona())
         self.assertEqual(len(results), 366)
         self.check_results(results)
 
     def test_parallel(self):
-        resultSeries = macro.simulate_series([[TestCorona().corona(),
-                                               TestCorona().corona()]
+        resultSeries = macro.simulate_series([TestCorona().corona()
                                               for _ in range(10)])
         self.assertEqual(len(resultSeries), 3660)
-        self.assertEqual(len(resultSeries[0]), 2)
-        self.assertEqual(len(resultSeries[3659]), 2)
+        self.assertEqual(len(resultSeries[0]), 3)
+        self.assertEqual(len(resultSeries[3659]), 3)
         results = [r for r in resultSeries if r[0]['iteration'] == 365]
 
         N_0 = macro.calc_totals(results[0][0])['N']
         N_1 = macro.calc_totals(results[1][0])['N']
         self.assertNotEqual(N_0, N_1)
-        self.assertLess(abs(N_0 - N_1), 15000)
+        self.assertLess(abs(N_0 - N_1), 150000)
 
         for i in range(10):
             results = [r for r in resultSeries if r[0]['ident'] == i]
