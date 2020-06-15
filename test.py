@@ -358,7 +358,6 @@ def mix_models(model, modelList):
         return result
 
     noise = model['parameters']['noise']
-    deltas = {}
     informal = modelList[0]['groups']
     formal = modelList[1]['groups']
     rural = modelList[2]['groups']
@@ -381,7 +380,6 @@ def mix_models(model, modelList):
                     delta_i_r = -delta_i_r
                     delta_r_f = -delta_r_f
 
-
                 formal[i]['compartments'][key] += delta_f_i
                 informal[i]['compartments'][key] -= delta_f_i
 
@@ -395,7 +393,7 @@ def mix_models(model, modelList):
 class TestCorona(unittest.TestCase):
 
     def corona(self):
-        parameters =  {
+        parameters = {
             'to': 365,
             'record_frequency': 1,
             'record_last': False,
@@ -597,7 +595,6 @@ class TestCorona(unittest.TestCase):
                 ]
             }
         ]
-
 
     def check_results(self, results):
         self.assertEqual(len(results), 366)

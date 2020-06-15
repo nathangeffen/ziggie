@@ -572,7 +572,7 @@ def calc_totals(model: Model) -> Dict[str, float]:
 
 
 def grand_sum_totals(totals: List[Dict[str, float]],
-                     ignore=['B', 'N']) ->float:
+                     ignore=['B', 'N', ]) -> float:
     """Calculate the sum of all compartments.
 
     Takes the output list generated using calc_totals and calculates the sum of
@@ -591,6 +591,7 @@ def grand_sum_totals(totals: List[Dict[str, float]],
             if key not in ignore:
                 total += value
     return total
+
 
 def sum_totals(totals: List[Dict[str, float]]) -> List[Dict[str, float]]:
     """Calculate the sum of compartments across multiple models.
@@ -879,17 +880,18 @@ def series_to_csv(modelListSeries: ModelListSeries, csvfile: str,
 def simulate(modelList: ModelList, ident=None) -> ModelListSeries:
     """Iterate list of models and return a time series of model lists.
 
-    Note that often the first parameter will only contain one model.  It's
+    Note that often the first parameter will only contain one model. It's
     typically only if you wish to iterate through distinct models that might be
     connected before or after each iteration through a hook in the
-    "before_funcs" or "after_funcs" parameters that there would be more than one
-    model in the list.
+    "before_funcs" or "after_funcs" parameters that there would be more than
+    one model in the list.
 
     Parameters:
     modelList (modelList): list of related models to iterate
     ident (int): unique identifier to use to identify this time series
                  (useful for generating a table or CSV file with multiple
                  model time series).
+
     """
     results = []
     for model in modelList:
