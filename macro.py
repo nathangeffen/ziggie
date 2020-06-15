@@ -57,198 +57,6 @@ This is a very simple model.
      },
 }
 
-This is complicated one showing many of the features of a model specification.
-
-{
-    'name': 'South African Covid-19',
-    'parameters': {
-        'to': 365,
-        'record_frequency': 1,
-        'record_last': False,
-        'noise': 0.1,
-        'asymptomatic_infectiousness': 0.75,
-        'reduce_infectivity': 0.999,
-        'after_funcs': [macro.reduce_infectivity, ],
-        'transition_funcs': {
-            'S_E': macro.delta_S_I1,
-        }
-    },
-    'transitions': {
-        'S_E': 0.31,
-        'E_A': 0.125,
-        'E_Im': 0.125,
-        'Im_Ic': 0.2,
-        'Ic_R': 0.2,
-        'A_R': 0.2
-    },
-    'groups': [
-        {
-            'name': 'Urban informal',
-            'transitions': {
-                'S_E': 0.45,
-            },
-            'groups': [
-                {
-                    'name': '0-24',
-                    'transitions': {
-                        'E_A': 0.25,
-                        'E_Im': 0.01,
-                        'Ic_D': 0.002
-                    },
-                    'compartments': {
-                        'S': 2100000,
-                        'E': 10,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                },
-                {
-                    'name': '25-54',
-                    'transitions': {
-                        'Ic_D': 0.003
-                    },
-                    'compartments': {
-                        'S': 2100000,
-                        'E': 0,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                },
-                {
-                    'name': '55-',
-                    'transitions': {
-                        'Ic_D': 0.03
-                    },
-                    'compartments': {
-                        'S': 600000,
-                        'E': 0,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                }
-            ]
-        },
-        {
-            'name': 'Urban formal',
-            'groups': [
-                {
-                    'name': '0-24',
-                    'transitions': {
-                        'E_A': 0.25,
-                        'E_Im': 0.01,
-                        'Ic_D': 0.002
-                    },
-                    'compartments': {
-                        'S': 16940000,
-                        'E': 0,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                },
-                {
-                    'name': '25-54',
-                    'transitions': {
-                        'Ic_D': 0.003
-                    },
-                    'compartments': {
-                        'S': 16940000,
-                        'E': 0,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                },
-                {
-                    'name': '55-',
-                    'transitions': {
-                        'Ic_D': 0.03
-                    },
-                    'compartments': {
-                        'S': 4620000,
-                        'E': 0,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                }
-            ]
-        },
-        {
-            'name': 'Rural',
-            'transitions': {
-                'S_E': 0.2,
-            },
-            'groups': [
-                {
-                    'name': '0-24',
-                    'transitions': {
-                        'E_A': 0.25,
-                        'E_Im': 0.01,
-                        'Ic_D': 0.002
-                    },
-                    'compartments': {
-                        'S': 7260000,
-                        'E': 10,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                },
-                {
-                    'name': '25-54',
-                    'transitions': {
-                        'Ic_D': 0.003
-                    },
-                    'compartments': {
-                        'S': 7260000,
-                        'E': 0,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                },
-                {
-                    'name': '55-',
-                    'transitions': {
-                        'Ic_D': 0.03
-                    },
-                    'compartments': {
-                        'S': 2000000,
-                        'E': 0,
-                        'Im': 0,
-                        'Ic': 0,
-                        'A': 0,
-                        'R': 0,
-                        'D': 0
-                    }
-                }
-
-            ]
-        }
-    ]
-}
-
-
 A ModelList is a list of models. The "simulate" function takes
 a list of models as its first parameter. Why? Let's say you have
 distinct regions you'd like to model, say London and Manchester.
@@ -261,11 +69,203 @@ with updated compartments on each iteration.  i.e. a list of ModelLists.
 
 This is called a ModelListSeries.
 
-If the output of each of the models is independent, what's the use
-of putting them in a ModelList? Well, you could specify a custom
-function in the "after_funcs" hyper parameter of one of the models. This
-function could migrate individuals between the two models or connect
-them in some other way.
+Here's an example of a ModelList of Covid-19 for South Africa. It is
+uncalibrated and for illustrative purposes only.
+
+The ModelList consists of three models: one for urban informal settlements, one
+for urban formal suburbs and one for rural areas.  Each of these has groups for
+people aged 0-24, 25-54 and 55 or older.
+
+[
+    {
+        'name': 'Urban informal',
+        'transitions': {
+            'S_E': 0.4,
+            'E_A': 0.125,
+            'E_Im': 0.125,
+            'Im_Ic': 0.2,
+            'Ic_R': 0.2,
+            'A_R': 0.2
+        },
+        'groups': [
+            {
+                'name': '0-24',
+                'transitions': {
+                    'E_A': 0.25,
+                    'E_Im': 0.01,
+                    'Ic_D': 0.002
+                },
+                'compartments': {
+                    'S': 2100000,
+                    'E': 10,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            },
+            {
+                'name': '25-54',
+                'transitions': {
+                    'Ic_D': 0.0032
+                },
+                'compartments': {
+                    'S': 2100000,
+                    'E': 0,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            },
+            {
+                'name': '55-',
+                'transitions': {
+                    'Ic_D': 0.032
+                },
+                'compartments': {
+                    'S': 600000,
+                    'E': 0,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            }
+        ]
+    },
+    {
+        'name': 'Urban formal',
+        'transitions': {
+            'S_E': 0.3,
+            'E_A': 0.125,
+            'E_Im': 0.125,
+            'Im_Ic': 0.2,
+            'Ic_R': 0.2,
+            'A_R': 0.2
+        },
+        'groups': [
+            {
+                'name': '0-24',
+                'transitions': {
+                    'E_A': 0.25,
+                    'E_Im': 0.01,
+                    'Ic_D': 0.002
+                },
+                'compartments': {
+                    'S': 16940000,
+                    'E': 10,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            },
+            {
+                'name': '25-54',
+                'transitions': {
+                    'Ic_D': 0.003
+                },
+                'compartments': {
+                    'S': 16940000,
+                    'E': 0,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            },
+            {
+                'name': '55-',
+                'transitions': {
+                    'Ic_D': 0.03
+                },
+                'compartments': {
+                    'S': 4620000,
+                    'E': 0,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            }
+        ]
+    },
+    {
+        'name': 'Rural',
+        'transitions': {
+            'S_E': 0.27,
+            'E_A': 0.125,
+            'E_Im': 0.125,
+            'Im_Ic': 0.2,
+            'Ic_R': 0.2,
+            'A_R': 0.2
+        },
+        'groups': [
+            {
+                'name': '0-24',
+                'transitions': {
+                    'E_A': 0.25,
+                    'E_Im': 0.01,
+                    'Ic_D': 0.002
+                },
+                'compartments': {
+                    'S': 7260000,
+                    'E': 10,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            },
+            {
+                'name': '25-54',
+                'transitions': {
+                    'Ic_D': 0.0035
+                },
+                'compartments': {
+                    'S': 7260000,
+                    'E': 0,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            },
+            {
+                'name': '55-',
+                'transitions': {
+                    'Ic_D': 0.035
+                },
+                'compartments': {
+                    'S': 2000000,
+                    'E': 0,
+                    'Im': 0,
+                    'Ic': 0,
+                    'A': 0,
+                    'R': 0,
+                    'D': 0
+                }
+            }
+
+        ]
+    }
+]
+
+
+If the output of each of the models is independent, what's the use of putting
+them in a ModelList? Well, you could specify a custom function in the
+"after_funcs" hyper parameter of one of the models. This function could migrate
+individuals between the two models or connect them in some other way. See the
+TestCorona class in test.py for an example.
 
 
 Transitions
