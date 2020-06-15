@@ -1,3 +1,15 @@
+"""Tests of macro.py module.
+
+This module runs a series of tests on the macro API. It should be executed
+every time code is committed.
+
+It can be executed thus:
+
+python test.py
+
+Requires Python 3.5 or higher.
+"""
+
 import csv
 import macro
 import tempfile
@@ -341,7 +353,7 @@ class TestCorona(unittest.TestCase):
     def corona(self):
 
         return {
-            'name': 'South African Covid-19',
+            'name': 'Community  Covid-19',
             'parameters': {
                 'to': 365,
                 'record_frequency': 1,

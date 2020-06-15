@@ -748,7 +748,7 @@ def modelList_to_table(modelList: ModelList, header=True,
     table corresponds to a group in each of the models in the list.
     It's especially useful for analysing the model output, for
     example with numpy. It is also an interim step to converting a
-    list of model to a comma-separated file.
+    list of models to a comma-separated file.
 
     Parameters
     modelList (ModelList): list of models to convert
@@ -766,6 +766,18 @@ def modelList_to_table(modelList: ModelList, header=True,
 
 def table_to_csv(table: List[List], csvfile: str, delimiter=',', quotechar='"',
                  quoting=csv.QUOTE_MINIMAL):
+    """Create a comma separated file from a table.
+
+    After creating a table of model outputs using modelList_to_table
+    this function can be used to create a CSV file from the table.
+
+    Parameters
+    table (list of lists): table to create CSV from
+    csvfile (str): name of the CSV file to create
+    delimiter (str): character to delimit CSV fields
+    quotechar (str): character to use to quote field strings
+    quoting (enum): quoting style to use (see csv.writer in Python docs)
+    """
     with open(csvfile, 'w', newline='') as csvfile:
         out = csv.writer(csvfile, delimiter=delimiter,
                          quotechar=quotechar, quoting=quoting)
@@ -775,6 +787,22 @@ def table_to_csv(table: List[List], csvfile: str, delimiter=',', quotechar='"',
 
 def series_to_table(modelListSeries: ModelListSeries, header=True,
                     concat_names=None) -> List[List]:
+    """Create a flat table from a series of model lists.
+
+    This function "flattens" a time series of model lists so that each row in
+    the table corresponds to a group in each model.  It's especially useful for
+    analysing the model output, for example with numpy. It is also an interim
+    step to converting a list of models to a comma-separated file.
+
+    Example:
+    table = series_to_table(simulate([my_model])
+
+    Parameters
+    modelListSeries (ModelListSeries): time series of model lists to convert
+    header (bool): whether or not the first row should be a header
+    concat_names (str): if not None then group names are concatenated,
+                        separated by this string
+    """
     table = []
     if header:
         table.append(_get_header(modelListSeries[0][0], concat_names))
@@ -788,11 +816,42 @@ def series_to_table(modelListSeries: ModelListSeries, header=True,
 def series_to_csv(modelListSeries: ModelListSeries, csvfile: str,
                   header=True, delimiter=',',
                   quotechar='"', quoting=csv.QUOTE_MINIMAL, concat_names=None):
+    """Create a comma separated file from a time series of model lists.
+
+    This function is typically used in conjunction with "simulate"
+    or "simulate_series" to generate a CSV file. E.g.
+
+    series_to_csv(simulate(my_model), "mycsvfile.csv")
+
+    Parameters
+    modelListSeries (ModelListSeries): a time series of model lists
+    csvfile (str): name of the CSV file to create
+    header (bool): whether the first row of the csv file should be a header
+    delimiter (str): character to delimit CSV fields
+    quotechar (str): character to use to quote field strings
+    quoting (enum): quoting style to use (see csv.writer in Python docs)
+    concat_names (str): if not None then group names are concatenated,
+                        separated by this string
+    """
     table = series_to_table(modelListSeries, header, concat_names)
     table_to_csv(table, csvfile, delimiter, quotechar, quoting)
 
 
-def simulate(modelList: Model, ident=None) -> ModelListSeries:
+def simulate(modelList: ModelList, ident=None) -> ModelListSeries:
+    """Iterate list of models and return a time series of model lists.
+
+    Note that often the first parameter will only contain one model.  It's
+    typically only if you wish to iterate through distinct models that might be
+    connected before or after each iteration through a hook in the
+    "before_funcs" or "after_funcs" parameters that there would be more than one
+    model in the list.
+
+    Parameters:
+    modelList (modelList): list of related models to iterate
+    ident (int): unique identifier to use to identify this time series
+                 (useful for generating a table or CSV file with multiple
+                 model time series).
+    """
     results = []
     for model in modelList:
         m = deepcopy(model)
@@ -807,7 +866,20 @@ def _simulate(m):
 
 def simulate_series(modelListSeries: ModelListSeries,
                     processes=os.cpu_count()) -> ModelListSeries:
+    """Execute series of models and return a time series of model lists.
 
+    This function is useful for sensitivity analysis or calibration.
+    The point of it is to execute the same or related models many times.
+    It uses Python's multiprocessing library to execute the models in
+    parallel. It returns a time series of model lists each with a unique
+    identifier so that the output can be sorted appropriately afterwards.
+
+    Parameters:
+    modelListSeries (modelListSeries): series of model lists to execute in
+                                       parallel
+    processes (int): number of CPU processes to use (default uses one
+                     process for each CPU on the machine)
+    """
     mls_with_ident = [(m[0], m[1]) for m in
                       zip(modelListSeries, range(len(modelListSeries)))]
     with Pool(processes=processes) as pool:
