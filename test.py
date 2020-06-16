@@ -633,7 +633,7 @@ class TestCorona(unittest.TestCase):
         N_0 = macro.calc_totals(results[0][0])['N']
         N_1 = macro.calc_totals(results[1][0])['N']
         self.assertNotEqual(N_0, N_1)
-        self.assertLess(abs(N_0 - N_1), 150000)
+        self.assertLess(abs(N_0 - N_1), 180000)
 
         for i in range(10):
             results = [r for r in resultSeries if r[0]['ident'] == i]
