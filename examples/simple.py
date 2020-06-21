@@ -12,8 +12,7 @@ simple = {
         'R': 0        # Recovered
     },
     'transitions': {
-        # (sometimes called beta in the literature)
-        'S_I': 0.6, # Effective contact rate
+        'S_I': 0.6, # Effective contact rate (sometimes beta in literature)
         'I_R': 0.1  # Recovery rate per day
     },
 }
