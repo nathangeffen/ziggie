@@ -472,7 +472,7 @@ def corona(self):
         }
     ]
 
-m = MacroModels.corona()
+m = corona()
 results = macro.simulate(m)
 print("Number of results:", len(results)) # Outputs 366
 print("Number of models:", len(results[-1])) # Outputs 3
