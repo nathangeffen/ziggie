@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="ziggie",
-    version="0.0.1",
+    version="0.0.2",
     author="Nathan Geffen",
     author_email="nathan@simhub.online",
     description="Infectious disease modelling package",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/nathangeffen/ziggy",
+    url="https://github.com/nathangeffen/ziggie",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
