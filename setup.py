@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="ziggie",
-    version="0.0.4",
+    version="0.0.5",
     author="Nathan Geffen",
     author_email="nathan@simhub.online",
     description="Infectious disease modelling package",
@@ -17,7 +17,7 @@ setuptools.setup(
         "Development Status :: 3 - Alpha",
 
         "Intended Audience :: Science/Research",
-        "Topic :: Scientific/Engineering :: Medical Science Apps",
+        "Topic :: Scientific/Engineering :: Medical Science Apps.",
 
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
