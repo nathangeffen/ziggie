@@ -1,6 +1,6 @@
 #!/bin/sh
 
 pip install .
-cd tests
+cd ziggie/tests
 python test.py
 cd ..

@@ -1,20 +1,20 @@
-# Ziggie macro modelling
+# Ziggy macro modelling
 
 THIS IS A WORK IN PROGRESS - NOT YET READY FOR USE
 
-Ziggie is a Python package for infectious disease modelling.
+Ziggy is a Python package for infectious disease modelling.
 
 The macro module facilitates compartmental modelling using difference equations,
 or macro models.
 
 ## Quick start
 
-Ziggie requires Python 3.5 or later.
+Ziggy requires Python 3.5 or later.
 
 First install it:
 
 ```bash
-pip install ziggie
+pip install ziggy
 ```
 
 Then test that it's working:
@@ -26,7 +26,7 @@ python test.py
 Here's Python code to create and run a simple SIR model
 
 ```Python
-from ziggie import macro
+from ziggy import macro
 
 # Simple SIR model with susceptible population of 1 million and
 # one infection. Effective contact rate per day is 0.6 and the
