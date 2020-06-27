@@ -2,8 +2,8 @@
 
 Ziggie is a Python package for infectious disease modelling.
 
-The macro module facilitates compartmental modelling using difference equations,
-or macro models.
+The macro module facilitates compartmental modelling using difference equations
+(i.e. macro models).
 
 ## Quick start
 
@@ -38,11 +38,12 @@ simple = {
     },
 }
 
-# Make a list of outputs with the results
-# which by default are printed out every 50 days and
-# at the beginning and end of the simulation.
-# Each entry in the results table is an updated model
-# For a particular day.
+""" Make a list of outputs with the results
+    which by default are stored every 50 days and
+    at the beginning and end of the simulation.
+    Each entry in the results table is an updated model
+    for a particular iteration (which corresponds to a day).
+"""
 results = macro.simulate([simple])
 print("Final day's results")
 print(results[-1])
