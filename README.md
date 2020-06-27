@@ -139,12 +139,12 @@ infectious (or exposed) individuals += delta
 Two functions are provided to deal with this: the very simple delta_S_I
 and the more sophisticated (but slower) delta_S_I1.
 
-The delta_SI1 calculates the total number of infectious individuals by adding
-all the compartments starting with an *I* as well as all compartments starting
-with an *A* (asymptomatic individuals) and *T* (treated individuals). Moreover
-the infectiousness of the asymptomatic individuals is multiplied by the
-parameter *asymptomatic_infectiousness* and the infectiousness of treated
-individuals by *treatment_infectiousness* (both default to 1).
+The delta_SI1 function calculates the total number of infectious individuals by
+adding all the compartments starting with an *I* as well as all compartments
+starting with an *A* (asymptomatic individuals) and *T* (treated
+individuals). Moreover the infectiousness of the asymptomatic individuals is
+multiplied by the parameter *asymptomatic_infectiousness* and the infectiousness
+of treated individuals by *treatment_infectiousness* (both default to 1).
 
 ## Compartment names which have meaning
 
