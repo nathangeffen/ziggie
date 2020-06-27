@@ -471,4 +471,20 @@ def corona(self):
             ]
         }
     ]
+
+m = MacroModels.corona()
+results = macro.simulate(m)
+print("Number of results:", len(results)) # Outputs 366
+print("Number of models:", len(results[-1])) # Outputs 3
+totals = [macro.calc_totals(results[-1][i])
+          for i in range(len(results[-1]))
+print(macro.sum_totals(totals))
+```
+
+The output is something like this:
+
+```
+Number of results: 366
+Number of models: 3
+{'N': 59685873.7194506, 'S': 47387513.37539025, 'E': 283059.79850507394, 'Im': 108802.85166144818, 'Ic': 106605.46023480814, 'A': 264806.9195997677, 'R': 11535085.314059254, 'D': 134156.28054939664}
 ```
