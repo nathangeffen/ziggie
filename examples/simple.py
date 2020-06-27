@@ -1,4 +1,4 @@
-from epi import macro
+from epimodels import macro
 
 # Simple SIR model with susceptible population of 1 million and
 # one infection. Effective contact rate per day is 0.6 and the
