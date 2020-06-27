@@ -12,7 +12,7 @@ Requires Python 3.5 or higher.
 
 import csv
 from copy import deepcopy
-from epimodels import macro
+from ziggy import macro
 import random
 import tempfile
 import unittest
