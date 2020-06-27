@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="ziggy",
+    name="ziggie",
     version="0.0.1",
     author="Nathan Geffen",
     author_email="nathan@simhub.online",

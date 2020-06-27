@@ -12,7 +12,7 @@ Requires Python 3.5 or higher.
 
 import csv
 from copy import deepcopy
-from ziggy import macro
+from ziggie import macro
 import random
 import tempfile
 import unittest
