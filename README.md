@@ -141,6 +141,7 @@ delta = susceptibles * number of contacts per iteration *
                        total population
 
 susceptibles -= delta
+
 infectious (or exposed) individuals += delta
 
 Two functions are provided to deal with this: the very simple delta_S_I
@@ -153,7 +154,7 @@ individuals). Moreover the infectiousness of the asymptomatic individuals is
 multiplied by the parameter *asymptomatic_infectiousness* and the infectiousness
 of treated individuals by *treatment_infectiousness* (both default to 1).
 
-## Compartment names which have meaning
+## Meaningful compartment prefixes
 
 Some of the compartment name prefixes are meaningful, in that the code might
 make assumptions about the compartment. A compartment name generally starts with
@@ -174,7 +175,7 @@ identifier. E.g. I1, I2, I3 or I4 for various stages of infectiousness.
 
 You can also prefix a compartment name with any other letter.
 
-## Conservation of population total principle
+## Conservation of compartment total principle
 
 Transition functions modify the values of the compartments. In doing so they
 follow a principle of conserving the population total.  The sum of all the
