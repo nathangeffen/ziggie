@@ -1,9 +1,14 @@
-# Ziggie macro modelling
+# Ziggie: Infectious disease modelling
 
 Ziggie is a Python package for infectious disease modelling.
 
+This is the README file for the macro module.
+
 The macro module facilitates compartmental modelling using difference equations
 (i.e. macro models).
+
+We hope in the future to implement a micro module too, for agent based modelling
+of infectious diseases.
 
 ## Quick start
 
