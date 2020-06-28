@@ -490,78 +490,150 @@ Number of models: 3
 {'N': 59685873.7194506, 'S': 47387513.37539025, 'E': 283059.79850507394, 'Im': 108802.85166144818, 'Ic': 106605.46023480814, 'A': 264806.9195997677, 'R': 11535085.314059254, 'D': 134156.28054939664}
 ```
 
+# Reference
+
+## Main data structures
+
+A model specification consists of groups. A model is itself the
+top-level group.
+
+Each group can itself contain groups.
+
+A group specification is a dictionary containing or more of the following
+fields:
+
+    * name - Name of group.
+    * transitions - Dictionary of probabilities of
+                    transitioning from one compartment to another.
+    * compartments - Dictionary of the number of people per
+                     compartment. A group must either have a
+                     "compartments" entry or "groups" entry but
+                     not both.
+    * groups: - Array of groups within this group.
+    * parameters: - Hyper-parameters for the model. These are usually
+                    only specified in the top-level (model) group. If
+                    not specified then the default PARAMETERS
+                    are copied and used in the model.
+                    If the hyper-parameters are partially specified,
+                    the unspecified parameters are copied from PARAMETERS.
+
+
+A ModelList is a list of models. The *simulate* function takes
+a list of models as its first parameter. Why? Let's say you have
+distinct regions you'd like to model, say London and Manchester.
+You would specify a model for each and then put them in a list (i.e. you
+now have a ModelList data structure). You can then run "simulate"
+on this ModelList.
+
+The output is two distinct sets of independent new model specification
+with updated compartments on each iteration.  i.e. a list of ModelLists.
+
+This is called a ModelListSeries.
+
+To summarise from lowest level to highest level:
+
+- Group: A dictionary defining part of a model. A model is itself a group.
+
+- Model: The highest level group. It defines a complete model.
+
+- ModelList: A list of models. This is what you pass to the *simulate* function
+
+- ModelListSeries: A list of ModelLists. This is the output of *simulate*.
+
+
 ## Function reference
 
-R0(modelListSeries: List[List[Dict]]) -> List[float]
-    Calculate R0 for a time series of model outputs.
+### Most frequently used functions
 
-    Highly inaccurate and needs to be reconceptualised. Don't use for now.
+simulate(modelList: ModelList, ident=None) -> ModelListSeries
 
-calc_totals(model: Dict) -> Dict[str, float]
+    Iterate list of models and return a time series of model lists.
+
+    Note that often the first parameter will only contain one model. It's
+    typically only if you wish to iterate through distinct models that might be
+    connected before or after each iteration through a hook in the
+    "before_funcs" or "after_funcs" parameters that there would be more than
+    one model in the list.
+
+    Parameters:
+
+    modelList (modelList): list of related models to iterate
+    ident (int): unique identifier to use to identify this time series
+                 (useful for generating a table or CSV file with multiple
+                 model time series).
+
+simulate_series(modelListSeries: ModelListSeries, processes=int)
+                -> ModelListSeries
+
+    Execute series of models and return a time series of model lists.
+
+    This function is useful for sensitivity analysis or calibration.
+    The point of it is to execute the same or related models many times.
+    It uses Python's multiprocessing library to execute the models in
+    parallel. It returns a time series of model lists each with a unique
+    identifier so that the output can be sorted appropriately afterwards.
+
+    Parameters:
+
+    modelListSeries (modelListSeries): series of model lists to execute in
+                                       parallel
+    processes (int): number of CPU processes to use (default uses one
+                     process for each CPU on the machine)
+
+
+series_to_csv(modelListSeries: ModelListSeries,
+              csvfile: str, header=True, delimiter=',',
+              quotechar='"', quoting=0, concat_names=None)
+
+    Create a comma separated file from a time series of model lists.
+
+    This function is typically used in conjunction with "simulate"
+    or "simulate_series" to generate a CSV file. E.g.
+
+    series_to_csv(simulate(my_model), "mycsvfile.csv")
+
+    Parameters
+
+    modelListSeries (ModelListSeries): a time series of model lists
+    csvfile (str): name of the CSV file to create
+    header (bool): whether the first row of the csv file should be a header
+    delimiter (str): character to delimit CSV fields
+    quotechar (str): character to use to quote field strings
+    quoting (enum): quoting style to use (see csv.writer in Python docs)
+    concat_names (str): if not None then group names are concatenated,
+                        separated by this string
+
+series_to_table(modelListSeries: ModelListSeries, header=True,
+                concat_names=None) -> List[List]
+
+    Create a flat table from a series of model lists.
+
+    This function "flattens" a time series of model lists so that each row in
+    the table corresponds to a group in each model.  It's especially useful for
+    analysing the model output, for example with numpy. It is also an interim
+    step to converting a list of models to a comma-separated file.
+
+    Example:
+    table = series_to_table(simulate([my_model])
+
+    Parameters
+
+    modelListSeries (ModelListSeries): time series of model lists to convert
+    header (bool): whether or not the first row should be a header
+    concat_names (str): if not None then group names are concatenated,
+                        separated by this string
+
+
+
+calc_totals(model: Model) -> Dict[str, float]
+
     Calculate sum of each compartment in all groups and return dict.
 
     This function traverses a model and calculates the sum of each compartment
     across all the groups. It also calculates N, the total living population.
 
-delta_S_I(from_to, beta, compartments, totals, model=None)
-    Return number of new infections.
-
-    Parameters:
-    from_to (str): transition name consisting of two compartment names
-                    separated by an underscore (e.g. S_Ic)
-    beta (float): effective contact rate
-    compartments (dict): dictionary of compartments including the two
-                         specified in from_to
-    totals (dict): dictionary containing a key 'N' that is the sum of the
-                   total population for this model.
-    model (Model): Unused but part of function signature
-
-delta_S_I1(from_to, beta, compartments, totals, model=None)
-    Return number of new infections.
-
-    In contrast to delta_S_I this function calculates the weighted
-    infectiousness of the population. In other words it calculates::
-
-    number susceptible * effective contact rate per iteration *
-    sum_infectiousness(model) / total population
-
-    Parameters:
-    from_to (str): transition name consisting of two compartment names
-                    separated by an underscore (e.g. S_I1)
-    beta (float): effective contact rate per iteration
-    compartments (dict): dictionary of compartments including the two
-                         specified in from_to
-    totals (dict): dictionary containing a key 'N' that is the sum of the
-                   total population for this model.
-    model (Model): model to calculate total infectiousness for
-
-delta_X_Y(from_to, prop, compartments, totals, model=None)
-    Return number individuals to be moved from one compartment to another.
-
-    Parameters:
-    from_to (str): transition name consisting of two compartment names
-                    separated by an underscore (e.g. I_R)
-    prop (float): proportion of "from" compartment to move
-    compartments (dict): dictionary of compartments including the two
-                         specified in from_to
-    totals (dict): Unused but part of function signature
-    model (Model): Unused but part of function signature
-
-delta_birth_X(from_to, prop, compartments, totals, model=None)
-    Return number new individuals in a population.
-
-    Parameters:
-    from_to (str): transition name consisting of a compartment name
-                   starting with a B followed by an underscore
-                   then another compartment, typically B_S (for
-                   number of births in susceptible population)
-    prop (float): proportion of "to" compartment that will be added
-    compartments (dict): dictionary of compartments including the "from"
-                         part of the from_to
-    totals (dict): Unused but part of function signature
-    model (Model): Unused but part of function signature
-
 grand_sum_totals(totals: List[Dict[str, float]], ignore=['B', 'N']) -> float
+
     Calculate the sum of all compartments.
 
     Takes the output list generated using calc_totals and calculates the sum of
@@ -570,10 +642,16 @@ grand_sum_totals(totals: List[Dict[str, float]], ignore=['B', 'N']) -> float
     E.g. print(grand_sum_totals([calc_totals[m] for m in model_list])
 
     Parameters:
+
     totals (output of calc_totals): list of compartment totals across models
     ignore (list of str): list of compartments to ignore
 
-modelList_to_table(modelList: List[Dict], header=True, concat_names=None) -> List[List]
+
+### Supporting functions
+
+modelList_to_table(modelList: List[Dict], header=True,
+                   concat_names=None) -> List[List]
+
     Create and return a table from a list of models.
 
     This function "flattens" a list of models so that each row in the
@@ -583,12 +661,14 @@ modelList_to_table(modelList: List[Dict], header=True, concat_names=None) -> Lis
     list of models to a comma-separated file.
 
     Parameters
+
     modelList (ModelList): list of models to convert
     header (bool): whether or not the first row should be a header
     concat_names (str): if not None then group names are concatenated,
                         separated by this string
 
 model_to_table(model: Dict, concat_names=None) -> List[List]
+
     Create and return a table from a model.
 
     This converts a model to list of lists, where each list corresponds
@@ -601,6 +681,7 @@ model_to_table(model: Dict, concat_names=None) -> List[List]
                         separated by this string
 
 reduce_infectivity(model: Dict, modelList=None)
+
     Reduce the values of the effective contact rates of a model.
 
     This is an optional function to be executed before or after each
@@ -612,75 +693,13 @@ reduce_infectivity(model: Dict, modelList=None)
     populations, the most susceptible will be infected first.
 
     Parameters
+
     model (Model): the model to apply the reductions to
     modelList (ModelList): Unused but part of function signature
 
-series_to_csv(modelListSeries: List[List[Dict]], csvfile: str, header=True, delimiter=',', quotechar='"', quoting=0, concat_names=None)
-    Create a comma separated file from a time series of model lists.
-
-    This function is typically used in conjunction with "simulate"
-    or "simulate_series" to generate a CSV file. E.g.
-
-    series_to_csv(simulate(my_model), "mycsvfile.csv")
-
-    Parameters
-    modelListSeries (ModelListSeries): a time series of model lists
-    csvfile (str): name of the CSV file to create
-    header (bool): whether the first row of the csv file should be a header
-    delimiter (str): character to delimit CSV fields
-    quotechar (str): character to use to quote field strings
-    quoting (enum): quoting style to use (see csv.writer in Python docs)
-    concat_names (str): if not None then group names are concatenated,
-                        separated by this string
-
-series_to_table(modelListSeries: List[List[Dict]], header=True, concat_names=None) -> List[List]
-    Create a flat table from a series of model lists.
-
-    This function "flattens" a time series of model lists so that each row in
-    the table corresponds to a group in each model.  It's especially useful for
-    analysing the model output, for example with numpy. It is also an interim
-    step to converting a list of models to a comma-separated file.
-
-    Example:
-    table = series_to_table(simulate([my_model])
-
-    Parameters
-    modelListSeries (ModelListSeries): time series of model lists to convert
-    header (bool): whether or not the first row should be a header
-    concat_names (str): if not None then group names are concatenated,
-                        separated by this string
-
-simulate(modelList: List[Dict], ident=None) -> List[List[Dict]]
-    Iterate list of models and return a time series of model lists.
-
-    Note that often the first parameter will only contain one model. It's
-    typically only if you wish to iterate through distinct models that might be
-    connected before or after each iteration through a hook in the
-    "before_funcs" or "after_funcs" parameters that there would be more than
-    one model in the list.
-
-    Parameters:
-    modelList (modelList): list of related models to iterate
-    ident (int): unique identifier to use to identify this time series
-                 (useful for generating a table or CSV file with multiple
-                 model time series).
-
-simulate_series(modelListSeries: List[List[Dict]], processes=4) -> List[List[Dict]]
-    Execute series of models and return a time series of model lists.
-
-    This function is useful for sensitivity analysis or calibration.
-    The point of it is to execute the same or related models many times.
-    It uses Python's multiprocessing library to execute the models in
-    parallel. It returns a time series of model lists each with a unique
-    identifier so that the output can be sorted appropriately afterwards.
-
-    Parameters:
-    modelListSeries (modelListSeries): series of model lists to execute in
-                                       parallel
-    processes (int): number of CPU processes to use (default uses one
-                     process for each CPU on the machine)
 
 sum_infectiousness(model: Dict) -> float
+
     Return weighted sum of all infection compartments.
 
     The infection compartments are all those that begin with an 'I'
@@ -690,9 +709,11 @@ sum_infectiousness(model: Dict) -> float
     the parameter treatment_infectiousness.
 
     Parameters:
+
     model: the model to sum
 
 sum_totals(totals: List[Dict[str, float]]) -> List[Dict[str, float]]
+
     Calculate the sum of compartments across multiple models.
 
     Takes the output list generated using calc_totals and calculates the sum of
@@ -701,15 +722,19 @@ sum_totals(totals: List[Dict[str, float]]) -> List[Dict[str, float]]
     E.g. print(sum_totals([calc_totals[m] for m in model_list])
 
     Parameters:
+
     totals (output of calc_totals): list of compartment totals across models
 
-table_to_csv(table: List[List], csvfile: str, delimiter=',', quotechar='"', quoting=0)
+table_to_csv(table: List[List], csvfile: str,
+             delimiter=',', quotechar='"', quoting=0)
+
     Create a comma separated file from a table.
 
     After creating a table of model outputs using modelList_to_table
     this function can be used to create a CSV file from the table.
 
     Parameters
+
     table (list of lists): table to create CSV from
     csvfile (str): name of the CSV file to create
     delimiter (str): character to delimit CSV fields
@@ -717,7 +742,99 @@ table_to_csv(table: List[List], csvfile: str, delimiter=',', quotechar='"', quot
     quoting (enum): quoting style to use (see csv.writer in Python docs)
 
 traverse(group: Dict) -> Generator[Dict, NoneType, NoneType]
+
     Generate all the groups of a model or group.
 
     Parameters:
+
     group: the group whose subgroups to traverse
+
+### Transition functions
+
+These are the provided transition functions, but you can easily code your
+own and modify the *transition_funcs* dictionary in *parameters* to make
+the system aware of it.
+
+All have the same function signature:
+
+    transition - usually named from_to
+    float  - this is taken from "transitions" entry of a model group.
+    compartments - compartments dictionary for a model group
+    totals - dictionary of the model level sum of all the compartments in this
+             group, including N the population size)
+    model - the entire current state of the model
+
+
+delta_S_I(from_to, beta, compartments, totals, model=None)
+
+    Return number of new infections.
+
+    Parameters:
+
+    from_to (str): transition name consisting of two compartment names
+                    separated by an underscore (e.g. S_Ic)
+    beta (float): effective contact rate
+    compartments (dict): dictionary of compartments including the two
+                         specified in from_to
+    totals (dict): dictionary containing a key 'N' that is the sum of the
+                   total population for this model.
+    model (Model): Unused but part of function signature
+
+delta_S_I1(from_to, beta, compartments, totals, model=None)
+
+    Return number of new infections.
+
+    In contrast to delta_S_I this function calculates the weighted
+    infectiousness of the population. In other words it calculates::
+
+    number susceptible * effective contact rate per iteration *
+    sum_infectiousness(model) / total population
+
+    Parameters:
+
+    from_to (str): transition name consisting of two compartment names
+                    separated by an underscore (e.g. S_I1)
+    beta (float): effective contact rate per iteration
+    compartments (dict): dictionary of compartments including the two
+                         specified in from_to
+    totals (dict): dictionary containing a key 'N' that is the sum of the
+                   total population for this model.
+    model (Model): model to calculate total infectiousness for
+
+delta_X_Y(from_to, prop, compartments, totals, model=None)
+
+    Return number individuals to be moved from one compartment to another.
+
+    Parameters:
+
+    from_to (str): transition name consisting of two compartment names
+                    separated by an underscore (e.g. I_R)
+    prop (float): proportion of "from" compartment to move
+    compartments (dict): dictionary of compartments including the two
+                         specified in from_to
+    totals (dict): Unused but part of function signature
+    model (Model): Unused but part of function signature
+
+delta_birth_X(from_to, prop, compartments, totals, model=None)
+
+    Return number new individuals in a population.
+
+    Parameters:
+
+    from_to (str): transition name consisting of a compartment name
+                   starting with a B followed by an underscore
+                   then another compartment, typically B_S (for
+                   number of births in susceptible population)
+    prop (float): proportion of "to" compartment that will be added
+    compartments (dict): dictionary of compartments including the "from"
+                         part of the from_to
+    totals (dict): Unused but part of function signature
+    model (Model): Unused but part of function signature
+
+### Experimental
+
+R0(modelListSeries: List[List[Dict]]) -> List[float]
+
+    Calculate R0 for a time series of model outputs.
+
+    Highly inaccurate and needs to be reconceptualised. Don't use for now.
