@@ -71,9 +71,64 @@ The output is:
 
 ```Python
 Final day's results
-[{'name': 'Simple model', 'compartments': {'S': 65525.67886409458, 'I': 1.5383929100326267e-07, 'R': 56934475.32113576}, 'transitions': {'S_I': 0.6, 'I_R': 0.1}, 'parameters': {'from': 0, 'to': 365, 'record_frequency': 50, 'reduce_infectivity': 1.0, 'asymptomatic_infectiousness': 1.0, 'treatment_infectiousness': 1.0, 'noise': 0.0, 'discrete': False, 'record_first': True, 'record_last': True, 'transition_funcs': {'S_I': <function delta_S_I at 0x7fa842cdb8b0>, 'S_E': <function delta_S_I at 0x7fa842cdb8b0>, 'S_I1': <function delta_S_I1 at 0x7fa84651e5e0>, 'S_E1': <function delta_S_I1 at 0x7fa84651e5e0>, 'B_S': <function delta_birth_X at 0x7fa84651e3a0>, 'default': <function delta_X_Y at 0x7fa846519310>}, 'before_funcs': [], 'after_funcs': []}, 'iteration': 365}]
+[
+        {
+           "name":"Simple model",
+           "compartments":{
+              "S":65525.67886409458,
+              "I":1.5383929100326267e-07,
+              "R":56934475.32113576
+
+           },
+           "transitions":{
+              "S_I":0.6,
+              "I_R":0.1
+
+           },
+           "parameters":{
+              "from":0,
+              "to":365,
+              "record_frequency":50,
+              "reduce_infectivity":1.0,
+              "asymptomatic_infectiousness":1.0,
+              "treatment_infectiousness":1.0,
+              "noise":0.0,
+              "discrete":False,
+              "record_first":True,
+              "record_last":True,
+              "transition_funcs":{
+                  "S_I":<function delta_S_I at 0x7fa842cdb8b0>,
+                  "S_E":<function delta_S_I at 0x7fa842cdb8b0>,
+                  "S_I1":<function delta_S_I1 at 0x7fa84651e5e0>,
+                  "S_E1":<function delta_S_I1 at 0x7fa84651e5e0>,
+                  "B_S":<function delta_birth_X at 0x7fa84651e3a0>,
+                  "default":<function delta_X_Y at 0x7fa846519310>
+              },
+              "before_funcs":[],
+              "after_funcs":[]
+           },
+            "iteration":365
+        }
+]
+
 Time series table
-[['iter', 'name_0', 'S', 'I', 'R'], [0, 'Simple model', 57000000, 1, 0], [50, 'Simple model', 2200495.449318898, 28345727.9672264, 26453777.583454713], [100, 'Simple model', 66701.56917131442, 167716.11455651774, 56765583.316272154], [150, 'Simple model', 65531.91780545574, 898.2457754223102, 56933570.83641911], [200, 'Simple model', 65525.71227208052, 4.810125157065176, 56934470.477602795], [250, 'Simple model', 65525.67904299378, 0.025758303410947692, 56934475.29519872], [300, 'Simple model', 65525.67886505151, 0.00013793615973905623, 56934475.32099703], [350, 'Simple model', 65525.67886409864, 7.38650518227673e-07, 56934475.32113517], [365, 'Simple model', 65525.67886409458, 1.5383929100326267e-07, 56934475.32113576]]
+[
+    ['iter', 'name_0', 'S', 'I', 'R'], [0, 'Simple model', 57000000, 1, 0],
+    [50, 'Simple model', 2200495.449318898, 28345727.9672264,
+    26453777.583454713],
+    [100, 'Simple model', 66701.56917131442, 167716.11455651774,
+    56765583.316272154],
+    [150, 'Simple model', 65531.91780545574, 898.2457754223102,
+    56933570.83641911],
+    [200, 'Simple model', 65525.71227208052, 4.810125157065176,
+    56934470.477602795], [250, 'Simple model', 65525.67904299378,
+    0.025758303410947692, 56934475.29519872],
+    [300, 'Simple model', 65525.67886505151, 0.00013793615973905623,
+    56934475.32099703], [350, 'Simple model', 65525.67886409864,
+    7.38650518227673e-07, 56934475.32113517],
+    [365, 'Simple model', 65525.67886409458, 1.5383929100326267e-07,
+    56934475.32113576]
+]
 ```
 
 You can open one of the generated CSV files in your favourite spreadsheet
@@ -175,6 +230,9 @@ identifier. E.g. I1, I2, I3 or I4 for various stages of infectiousness.
 
 You can also prefix a compartment name with any other letter.
 
+Please don't prefix a compartment name with *N* unless you are intentionally
+changing the behaviour of the package.
+
 ## Conservation of compartment total principle
 
 Transition functions modify the values of the compartments. In doing so they
@@ -222,9 +280,26 @@ Then the output is this:
 
 ```
 At beginning:
-{'B': 0, 'S': 1000000, 'E': 1, 'I1': 0, 'I2': 0, 'R': 0, 'D': 0}
+{
+    'B': 0,
+    'S': 1000000,
+    'E': 1,
+    'I1': 0,
+    'I2': 0,
+    'R': 0,
+    'D': 0
+}
+
 At end:
-{'B': -2994.21267341553, 'S': 45332.73554133325, 'E': 4.309129982140191e-21, 'I1': 2.89707249176627e-20, 'I2': 2.2435680990481992e-10, 'R': 870602.2519382564, 'D': 87060.22519382556}
+{
+    'B': -2994.21267341553,
+    'S': 45332.73554133325,
+    'E': 4.309129982140191e-21,
+    'I1': 2.89707249176627e-20,
+    'I2': 2.2435680990481992e-10,
+    'R': 870602.2519382564,
+    'D': 87060.22519382556
+}
 ```
 
 Note that the births are negative. Also note what happens if we sum the
