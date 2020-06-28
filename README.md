@@ -37,7 +37,7 @@ simple = {
         'R': 0        # Recovered
     },
     'transitions': {
-        # (sometimes called beta in the literature)
+        # S_I is sometimes called beta in the literature
         'S_I': 0.6, # Effective contact rate
         'I_R': 0.1  # Recovery rate per day
     },
@@ -46,7 +46,8 @@ simple = {
 """ Make a list of outputs with the results
     which by default are stored every 50 days and
     at the beginning and end of the simulation.
-    Each entry in the results table is an updated model
+    Each entry in the results list is the updated model (singular in this
+    particular example, but you could have many models)
     for a particular iteration (which corresponds to a day).
 """
 results = macro.simulate([simple])
@@ -75,7 +76,8 @@ Time series table
 [['iter', 'name_0', 'S', 'I', 'R'], [0, 'Simple model', 57000000, 1, 0], [50, 'Simple model', 2200495.449318898, 28345727.9672264, 26453777.583454713], [100, 'Simple model', 66701.56917131442, 167716.11455651774, 56765583.316272154], [150, 'Simple model', 65531.91780545574, 898.2457754223102, 56933570.83641911], [200, 'Simple model', 65525.71227208052, 4.810125157065176, 56934470.477602795], [250, 'Simple model', 65525.67904299378, 0.025758303410947692, 56934475.29519872], [300, 'Simple model', 65525.67886505151, 0.00013793615973905623, 56934475.32099703], [350, 'Simple model', 65525.67886409864, 7.38650518227673e-07, 56934475.32113517], [365, 'Simple model', 65525.67886409458, 1.5383929100326267e-07, 56934475.32113576]]
 ```
 
-You can also open one of the generated CSV files in your favourite spreadsheet program.
+You can open one of the generated CSV files in your favourite spreadsheet
+program.
 
 It's also easy to use with numpy. In the above example the table variable
 consists of string and floats. Numpy arrays really only make sense if they're
@@ -155,8 +157,8 @@ of treated individuals by *treatment_infectiousness* (both default to 1).
 
 Some of the compartment name prefixes are meaningful, in that the code might
 make assumptions about the compartment. A compartment name generally starts with
-one of these meaningful prefixes and then a unique identifier. E.g. I1, I2, I3
-or I4 for various stages of infectiousness.
+one of these meaningful prefixes and then an optional unique
+identifier. E.g. I1, I2, I3 or I4 for various stages of infectiousness.
 
 - S - Susceptible  (See delta_S_I and delta_S_I1)
 - E - Exposed  (See delta_S_I and delta_S_I1)
@@ -171,6 +173,75 @@ or I4 for various stages of infectiousness.
 - V - Vaccinated
 
 You can also prefix a compartment name with any other letter.
+
+## Conservation of population total principle
+
+Transition functions modify the values of the compartments. In doing so they
+follow a principle of conserving the population total.  The sum of all the
+compartments, except those prefixed with *N* which should never be set or
+modified in any way by users, should always come to the same amount after the
+model is iterated (except for tiny rounding errors).
+
+Take this simple SEIR model which also caters for births and deaths:
+
+```Python
+seir = {
+            'name': 'Simple SEIR model',
+            'compartments': {
+                'B': 0,       # Births
+                'S': 1000000, # Susceptible
+                'E': 1,       # Exposed
+                'I1': 0,      # Infectious stage 1
+                'I2': 0,      # Infectious stage 2
+                'R': 0,       # Recovered
+                'D': 0        # Dead
+            },
+            'transitions': {
+                'B_S': 0.02/365.0, # Birth rate per day
+                'S_E': 0.6,        # Effective contact rate per day
+                'E_I1': 0.2,       # Exposed to infection stage 1 per day
+                'I1_I2': 0.2,      # Infection stage 1 to stage 2 per day
+                'I2_R': 0.1,       # Recovery rate per day
+                'I2_D': 0.01       # Death rate for infection stage 2 per day
+            },
+        }
+```
+
+Now if we run the model:
+
+```Python
+results = simulate(seir)
+print("At beginning:")
+print(results[0][0]['compartments'])
+print("At end:")
+print(results[-1][0]['compartments'])
+```
+
+Then the output is this:
+
+```
+At beginning:
+{'B': 0, 'S': 1000000, 'E': 1, 'I1': 0, 'I2': 0, 'R': 0, 'D': 0}
+At end:
+{'B': -2994.21267341553, 'S': 45332.73554133325, 'E': 4.309129982140191e-21, 'I1': 2.89707249176627e-20, 'I2': 2.2435680990481992e-10, 'R': 870602.2519382564, 'D': 87060.22519382556}
+```
+
+Note that the births are negative. Also note what happens if we sum the
+compartments:
+
+```Python
+print(sum(results[0][-1]['compartments'].values()))
+print(sum(results[-1][-1]['compartments'].values()))
+
+```
+
+The output shows that the sum of the compartments at the beginning and end of
+the simulation are identical (less a tiny rounding error):
+
+```
+1000001
+1000000.9999999999
+```
 
 ## Noise
 

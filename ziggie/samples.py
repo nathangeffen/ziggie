@@ -187,6 +187,29 @@ class MacroModels():
 
         return g
 
+    def seir(self):
+        return {
+            'name': 'Simple SEIR model',
+            'compartments': {
+                'B': 0,       # Births
+                'S': 1000000, # Susceptible
+                'E': 1,       # Exposed
+                'I1': 0,      # Infectious stage 1
+                'I2': 0,      # Infectious stage 2
+                'R': 0,       # Recovered
+                'D': 0        # Dead
+            },
+            'transitions': {
+                'B_S': 0.02/365.0, # Birth rate per day
+                'S_E': 0.6,        # Effective contact rate per day
+                'E_I1': 0.2,       # Exposed to infection stage 1 per day
+                'I1_I2': 0.2,      # Infection stage 1 to stage 2 per day
+                'I2_R': 0.1,       # Recovery rate per day
+                'I2_D': 0.01       # Death rate for infection stage 2 per day
+            },
+        }
+
+
     def corona(self):
         parameters = {
             'to': 365,
